@@ -1,0 +1,11 @@
+barcodes.tsv
+fastq/*
+genome/*
+logs/*
+.snakemake/
+
+config.yaml
+
+
+!fastq/.gitkeep
+!genome/.gitkeep
