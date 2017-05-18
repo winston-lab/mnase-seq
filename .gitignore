@@ -3,6 +3,7 @@ fastq/*
 genome/*
 logs/*
 .snakemake/
+alignment/
 
 config.yaml
 
