@@ -2,17 +2,12 @@
 
 configfile: "config.yaml"
 
-#CONTROL = config["control"]
-#CONDITION = config["condition"]
-
-#if using python <3.5:
-#SAMPLES = {**CONTROL, **CONDITION}
-#SAMPLES = CONTROL.copy()
-#SAMPLES.update(config["condition"])
-
 SAMPLES = config["barcodes"]
 
 #localrules: all,
+#            make_barcode_file,
+#            bowtie_build,
+#            build_nucwave_input
 
 #requirements
 # seq/ea-utils/
@@ -21,13 +16,16 @@ SAMPLES = config["barcodes"]
 # seq/bowtie/1.1.1
 # seq/samtools/1.3
 # pip install numpy PyWavelets
-# NUCwave requires python 2.7
+# pip install deeptools
+# UNLOAD deeptools, pysam
 
 rule all:
     input:
         #expand("fastq/{sample}.r1.fastq.gz", sample=SAMPLES)
         #expand("fastq/trimmed/{sample}-trim.r1.fastq.gz", sample=SAMPLES)
-        expand("alignment/{sample}.bam", sample=SAMPLES)
+        #expand("alignment/{sample}.bowtie", sample=SAMPLES)
+        #expand("nucwave/{sample}/{sample}_depth_c_wl_norm.wig", sample=SAMPLES)
+        expand("bedgraph/{sample}.bedgraph", sample=SAMPLES)
 
 rule make_barcode_file:
     output:
@@ -103,7 +101,7 @@ rule bowtie:
         #r2 = "fastq/trimmed/{sample}-trim.r2.fastq.gz"
     output:
         "alignment/{sample}.bam"
-    threads: 4
+    threads: config["threads"]
     params:
         outbase = "genome/" + basename,
         max_mismatch = config["bowtie"]["max_mismatch"],
@@ -115,7 +113,18 @@ rule bowtie:
     #    (bowtie -v {params.max_mismatch} -I {params.min_ins} -X {params.max_ins} --fr --nomaqround --best -S -p {threads} {params.outbase} -1 {input.r1} -2 {input.r2} | samtools view -buh -f 0x2 - | samtools sort -T {wildcards.sample} -@ {threads} -o {output} -) &> {log}
     #    """
     shell: """
-        (bowtie -v {params.max_mismatch} --nomaqround --best -S -p {threads} {params.outbase} {input.r1} | samtools view -buh -f 0x2 - | samtools sort -T {wildcards.sample} -@ {threads} -o {output} -) &> {log}
+        (bowtie -v {params.max_mismatch} --nomaqround --best -S -p {threads} {params.outbase} {input.r1} | samtools view -buh  - | samtools sort -T {wildcards.sample} -@ {threads} -o {output} -) &> {log}
+        """
+
+rule samtools_index:
+    input:
+        "alignment/{sample}.bam"
+    output:
+        "alignment/{sample}.bam.bai"
+    log:
+        "logs/samtools_index.log"
+    shell: """
+        samtools index -b {input} 
         """
 
 rule build_nucwave_input:
@@ -123,26 +132,80 @@ rule build_nucwave_input:
        "alignment/{sample}.bam" 
     output:
        "alignment/{sample}.bowtie"
+    #shell: """
+    #    samtools view {input} | awk 'BEGIN{{FS=OFS="\t"}} ($2==163) || ($2==99) {{print "+", $3, $4-1, $10}} ($2==83) || ($2==147) {{print "-", $3, $4-1, $10}}' > {output}
+    #    """
     shell: """
-        samtools view {input} | awk 'BEGIN{FS=OFS="\t"} ($2==163) || ($2==99) {print "+", $3, $4-1, $10} ($2==83) || ($2==147) {print "-", $3, $4-1, $10}' > {output}
+        samtools view {input} | awk 'BEGIN{{FS=OFS="\t"}} ($2==0) {{print "+", $3, $4-1, $10}} ($2==16) {{print "-", $3, $4-1, $10}}' > {output}
         """
 
 rule nucwave:
     input:
-        fasta = config["genome"][fasta],
+        fasta = config["genome"]["fasta"],
         alignment = "alignment/{sample}.bowtie"
     output:
-        expand("nucwave/{sample}/{sample}_{extension}.wig", extension=["cut_p", "cut_m", "depth_complete_PE", "PE_center", "depth_trimmed_PE", "depth_wl_trimmed_PE"]),
-        "nucwave/{sample}/{sample}.historeadsize"
-    log: "logs/nucwave.log"
+        "nucwave/{sample}/{sample}_cut_p.wig",
+        "nucwave/{sample}/{sample}_cut_m.wig",
+        "nucwave/{sample}/{sample}_depth_p.wig",
+        "nucwave/{sample}/{sample}_depth_m.wig",
+        "nucwave/{sample}/{sample}_depth_p_wl.wig",
+        "nucwave/{sample}/{sample}_depth_m_wl.wig",
+        "nucwave/{sample}/{sample}_depth_c.wig",
+        "nucwave/{sample}/{sample}_depth_c_wl.wig",
+        "nucwave/{sample}/{sample}_depth_c_wl_norm.wig",
+        #"nucwave/{sample}/{sample}_complete_PE.wig",
+        #"nucwave/{sample}/{sample}_PE_center.wig",
+        #"nucwave/{sample}/{sample}_depth_trimmed_PE.wig",
+        #"nucwave/{sample}/{sample}_wl_trimmed_PE.wig",
+        #"nucwave/{sample}/{sample}.historeadsize.wig"
+    log:
+        "logs/nucwave.log"
+    #shell: """
+    #   (python scripts/nucwave_pe.py -w -o nucwave/{wildcards.sample} -g {input.fasta} -a {input.alignment} -p {wildcards.sample}) &> {log}
+    #   """
     shell: """
-       (python scripts/nucwave_pe.py -w -o {wildcards.sample} -g {input.fasta} -a {input.alignment} -p {wildcards.sample}) &> {log}
-       """
+        (python scripts/nucwave_sr.py -w -o nucwave/{wildcards.sample} -g {input.fasta} -a {input.alignment} -p {wildcards.sample}) &> {log}
+        """
 
+rule midpoint_coverage:
+    input:
+        bam = "alignment/{sample}.bam",
+        index = "alignment/{sample}.bam.bai"
+    output:
+        "coverage/{sample}-midpoint-coverage-RPM.bedgraph"
+    params:
+        minsize = config["bowtie"]["min_ins"],
+        maxsize = config["bowtie"]["max_ins"]
+    threads: config["threads"]
+    shell: """
+        bamCoverage -b {input.bam} -o {output} -of bedgraph --MNase -bs 1 -p {threads} --normalizeUsingRPKM --minFragmentLength {params.minsize} --maxFragmentLength {params.maxsize}
+        """
 
+rule midpoint_coverage_smoothed:
+    input:
+        bam = "alignment/{sample}.bam",
+        index = "alignment/{sample}.bam.bai"
+    output:
+        "coverage/{sample}-midpoint-coverage-smoothed-RPM.bedgraph"
+    params:
+        minsize = config["bowtie"]["min_ins"],
+        maxsize = config["bowtie"]["max_ins"],
+        smoothwindow = config["coverage"]["smooth_window"]
+    threads: config["threads"]
+    shell: """
+        bamCoverage -b {input.bam} -o {output} -of bedgraph --MNase -bs 1 -p {threads} --normalizeUsingRPKM --minFragmentLength {params.minsize} --maxFragmentLength {params.maxsize} --smoothLength {params.smoothwindow}
+        """
 
-
-#rule danpos:
-
-
-
+rule total_coverage:
+    input:
+        bam = "alignment/{sample}.bam",
+        index = "alignment/{sample}.bam.bai"
+    output:
+        "coverage/{sample}-total-coverage-RPM.bedgraph"
+    params:
+        minsize = config["bowtie"]["min_ins"],
+        maxsize = config["bowtie"]["max_ins"]
+    threads: config["threads"]
+    shell: """
+        bamCoverage -b {input.bam} -o {output} -of bedgraph --extendReads -bs 1 -p {threads} --normalizeUsingRPKM --minFragmentLength {params.minsize} --maxFragmentLength {params.maxsize} 
+        """
