@@ -6,6 +6,7 @@ logs/*
 alignment/
 coverage/
 nucwave/
+qual_ctrl/
 
 config.yaml
 
