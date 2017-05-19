@@ -4,10 +4,11 @@ configfile: "config.yaml"
 
 SAMPLES = config["barcodes"]
 
-#localrules: all,
-#            make_barcode_file,
-#            bowtie_build,
-#            build_nucwave_input
+localrules: all,
+            make_barcode_file,
+            bowtie_build,
+            samtools_index,
+            build_nucwave_input
 
 #requirements
 # seq/ea-utils/
@@ -21,11 +22,15 @@ SAMPLES = config["barcodes"]
 
 rule all:
     input:
-        #expand("fastq/{sample}.r1.fastq.gz", sample=SAMPLES)
-        #expand("fastq/trimmed/{sample}-trim.r1.fastq.gz", sample=SAMPLES)
-        #expand("alignment/{sample}.bowtie", sample=SAMPLES)
-        #expand("nucwave/{sample}/{sample}_depth_c_wl_norm.wig", sample=SAMPLES)
-        #expand("bedgraph/{sample}.bedgraph", sample=SAMPLES)
+        "qual_ctrl/raw",
+        expand("qual_ctrl/trim-{sample}", sample=SAMPLES), 
+        "qual_ctrl/coverage.tsv",
+        "qual_ctrl/coverage.png",
+        "qual_ctrl/frag-size-hist.png",
+        expand("nucwave/{sample}/{sample}.historeadsize.wig", sample=SAMPLES),
+        expand("coverage/{sample}-midpoint-coverage-RPM.bedgraph", sample=SAMPLES),
+        expand("coverage/{sample}-midpoint-coverage-smoothed-RPM.bedgraph", sample=SAMPLES),
+        expand("coverage/{sample}-total-coverage-RPM.bedgraph", sample=SAMPLES)
 
 rule make_barcode_file:
     output:
@@ -57,7 +62,7 @@ rule demultiplex:
         barcodes = "barcodes.tsv"
     output:
         r1 = expand("fastq/{sample}.r1.fastq.gz", sample=config["barcodes"]),
-        r2 = expand("fastq/{sample}.r22.fastq.gz", sample=config["barcodes"])
+        r2 = expand("fastq/{sample}.r2.fastq.gz", sample=config["barcodes"])
     log:
         "logs/demultiplex.log"
     shell: """
