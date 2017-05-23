@@ -7,6 +7,7 @@ alignment/
 coverage/
 nucwave/
 qual_ctrl/
+correlations/
 
 config.yaml
 
