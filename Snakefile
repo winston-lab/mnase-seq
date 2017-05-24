@@ -8,8 +8,16 @@ localrules: all,
             make_barcode_file,
             bowtie_build,
             samtools_index,
-            build_nucwave_input
-
+            build_nucwave_input,
+            get_fragsizes,
+            cat_fragsizes,
+            make_fragments_table,
+            midpoint_coverage,
+            total_coverage,
+            seq_depth_norm,
+            make_window_file,
+            map_to_windows,
+            cat_windows
 #requirements
 # seq/ea-utils/
 # UNLOAD seq/cutadapt/1.11
@@ -26,13 +34,9 @@ rule all:
         expand("qual_ctrl/trim-{sample}", sample=SAMPLES), 
         "qual_ctrl/coverage.tsv",
         "qual_ctrl/coverage.png",
-        "qual_ctrl/frag-size-hist.png",
-        #expand("nucwave/{sample}/{sample}.historeadsize.wig", sample=SAMPLES),
+        "qual_ctrl/frag-size-dist.png",
         expand("nucwave/{sample}/{sample}_depth_wl_trimmed_PE.wig", sample=SAMPLES),
-        #expand("coverage/{sample}-midpoint-coverage-RPM.bedgraph", sample=SAMPLES),
-        "correlations/midpoint-coverage-RPM.npz",
-        expand("coverage/{sample}-midpoint-coverage-smoothed-RPM.bedgraph", sample=SAMPLES),
-        expand("coverage/{sample}-total-coverage-RPM.bedgraph", sample=SAMPLES)
+        expand("coverage/{sample}-midpoint-CPM.bedgraph", sample=SAMPLES),
 
 rule make_barcode_file:
     output:
@@ -44,6 +48,7 @@ rule make_barcode_file:
             for x in params.bc:
                 out.write(('\t'.join((x, params.bc[x]))+'\n'))
 
+#fastQC on raw sequencing data
 rule fastqc_raw:
     input:
        r1 = config["fastq"]["r1"],
@@ -70,17 +75,15 @@ rule demultiplex:
     shell: """
        (fastq-multx -B {input.barcodes} -b {input.r1} {input.r2} -o fastq/%.r1.fastq.gz -o fastq/%.r2.fastq.gz ) &> {log}
         """
-# for single end testing:
-    #shell: """
-    #    (fastq-multx -B {input.barcodes} -b {input.r1} -o fastq/%.r1.fastq.gz) &> {log}
-    #    """
-# note: we could enforce a minimum quality score for the barcode, but if the quality is that bad at the first bases then the data are probably unusable anyway
-# note: for the inline barcodes on both reads, fastq-multx only removes the barcode
+# note: fastq-multx only remove the barcode on read 1. The barcode on read 2 is removed with cutadapt.
 
-#here we use cutadapt to remove the barcode for read2, and cut the A tail and do quality trimming for both reads
-#we would like to use --nextseq-trim for 2-color quality trimming, but it doesn't do read2 currently
-# note: this assumes ascii(phred+33) quality scores, which I think is standard for modern Illumina sequencers
-# THE MINIMUM LENGTH REQUIREMENT IS IMPORTANT TO SANITIZE THE OUTPUT FOR BOWTIE 1
+# cutadapt:
+#    remove barcode from read 2
+#    trim the 'A' tail off
+#    do quality trimming for both reads
+#        - ideally, we would use --nextseq-trim for 2-color quality trimming instead of -q
+#            - however, --nextseq-trim currently doesn't trim read 2
+#    note: the minimum length requirement (trimmed read >= 5nt) is important to sanitize the output for bowtie 1
 rule cutadapt:
     input:
         r1 = "fastq/{sample}.r1.fastq.gz",
@@ -96,11 +99,8 @@ rule cutadapt:
     shell: """
         (cutadapt -u 1 -G ^{params.adapter} -q {params.qual_cutoff} --minimum-length 5 -o {output.r1} -p {output.r2} {input.r1} {input.r2}) &> {log}
         """
-# for single end testing:
-    #shell: """
-    #    (cutadapt -u 1 --nextseq-trim={params.qual_cutoff} -o {output.r1} {input.r1}) &> {log}
-    #    """
 
+#fastQC on demultiplexed and trimmed reads
 rule fastqc_processed:
     input:
         r1 = "fastq/trimmed/{sample}-trim.r1.fastq",
@@ -114,7 +114,7 @@ rule fastqc_processed:
         (fastqc -o {output} --noextract -t {threads} {input.r1} {input.r2}) &> {log}
         """
 
-#build bowtie index for given genome
+#build bowtie index for genome
 basename = config["genome"]["name"]
 
 rule bowtie_build:
@@ -131,7 +131,8 @@ rule bowtie_build:
         (bowtie-build {input.fasta} {params.outbase}) &> {log}
         """
 
-#in christine's paper, Burak uses -m 10 --best
+#align with Bowtie 1
+#in Christine's paper, Burak uses -m 10 --best
 rule bowtie:
     input:
         expand("genome/" + basename + ".{n}.ebwt", n=[1,2,3,4]),
@@ -140,7 +141,6 @@ rule bowtie:
         r2 = "fastq/trimmed/{sample}-trim.r2.fastq"
     output:
         bam ="alignment/{sample}.bam"
-        #unaligned="alignment/unaligned-{sample}.fastq"
     threads: config["threads"]
     params:
         outbase = "genome/" + basename,
@@ -152,10 +152,6 @@ rule bowtie:
     shell: """
         (bowtie -v {params.max_mismatch} -I {params.min_ins} -X {params.max_ins} --fr --nomaqround --best -S -p {threads} --un alignment/unaligned-{wildcards.sample}.fastq {params.outbase} -1 {input.r1} -2 {input.r2} | samtools view -buh -f 0x2 - | samtools sort -T {wildcards.sample} -@ {threads} -o {output.bam} -) &> {log}
         """
-#for single end testing
-    #shell: """
-    #    (bowtie -v {params.max_mismatch} --nomaqround --best -S -p {threads} {params.outbase} {input.r1} | samtools view -buh  - | samtools sort -T {wildcards.sample} -@ {threads} -o {output} -) &> {log}
-    #    """
 
 rule samtools_index:
     input:
@@ -181,20 +177,8 @@ rule deeptools_plotcoverage:
     log: "logs/deeptools/deeptools_plotcoverage.log"
     threads: config["threads"]
     shell: """
-        (plotCoverage -n 50000 --outRawCounts {output.table} -p {threads} -v --extendReads --minFragmentLength {params.min_ins} --maxFragmentLength {params.max_ins} -b {input.bam} -o {output.fig}) &> {log}
+        (plotCoverage --outRawCounts {output.table} -p {threads} -v --extendReads --minFragmentLength {params.min_ins} --maxFragmentLength {params.max_ins} -b {input.bam} -o {output.fig}) &> {log}
         """   
-
-rule deeptools_fragsize:
-    input:
-        bam = expand("alignment/{sample}.bam", sample=SAMPLES),
-        index = expand("alignment/{sample}.bam.bai", sample=SAMPLES)
-    output:
-        hist = "qual_ctrl/frag-size-hist.png"
-    log: "logs/deeptools/deeptools_fragsize.log"
-    threads: config["threads"]
-    shell: """
-        (bamPEFragmentSize -b {input.bam} -hist {output.hist} -p {threads}) &> {log} 
-        """
 
 rule build_nucwave_input:
     input:
@@ -204,10 +188,6 @@ rule build_nucwave_input:
     shell: """
         samtools view {input} | awk 'BEGIN{{FS=OFS="\t"}} ($2==163) || ($2==99) {{print "+", $3, $4-1, $10}} ($2==83) || ($2==147) {{print "-", $3, $4-1, $10}}' > {output}
         """
-#for single end testing:
-#    shell: """
-#        samtools view {input} | awk 'BEGIN{{FS=OFS="\t"}} ($2==0) {{print "+", $3, $4-1, $10}} ($2==16) {{print "-", $3, $4-1, $10}}' > {output}
-#        """
 
 rule nucwave:
     input:
@@ -216,13 +196,6 @@ rule nucwave:
     output:
         "nucwave/{sample}/{sample}_cut_p.wig",
         "nucwave/{sample}/{sample}_cut_m.wig",
-#for SE #"nucwave/{sample}/{sample}_depth_p.wig",
-        #"nucwave/{sample}/{sample}_depth_m.wig",
-        #"nucwave/{sample}/{sample}_depth_p_wl.wig",
-        #"nucwave/{sample}/{sample}_depth_m_wl.wig",
-        #"nucwave/{sample}/{sample}_depth_c.wig",
-        #"nucwave/{sample}/{sample}_depth_c_wl.wig",
-        #"nucwave/{sample}/{sample}_depth_c_wl_norm.wig",
         "nucwave/{sample}/{sample}_depth_complete_PE.wig",
         "nucwave/{sample}/{sample}_PEcenter.wig",
         "nucwave/{sample}/{sample}_depth_trimmed_PE.wig",
@@ -233,81 +206,142 @@ rule nucwave:
     shell: """
        (python scripts/nucwave_pe.py -w -o nucwave/{wildcards.sample} -g {input.fasta} -a {input.alignment} -p {wildcards.sample}) &> {log}
        """
-#for single end testing:
-    #shell: """
-    #    (python scripts/nucwave_sr.py -w -o nucwave/{wildcards.sample} -g {input.fasta} -a {input.alignment} -p {wildcards.sample}) &> {log}
-    #    """
+
+rule get_fragments:
+    input:
+        bam = "alignment/{sample}.bam"
+    output:
+        "alignment/fragments/{sample}-fragments.bedpe"
+    threads: config["threads"]
+    shell: """
+        samtools sort -n -@ {threads} {input.bam} | bedtools bamtobed -bedpe -i stdin > {output}
+        """
+
+rule get_fragsizes:
+    input:
+        "alignment/fragments/{sample}-fragments.bedpe"
+    output:
+        temp("alignment/fragments/.{sample}-fragsizes.tsv")
+    shell: """
+        awk -v sample={wildcards.sample} 'BEGIN{{FS=OFS="\t"}}{{print sample , $6-$2}}' {input} > {output}
+        """
+
+rule cat_fragsizes:
+    input:
+        expand("alignment/fragments/.{sample}-fragsizes.tsv", sample=SAMPLES)
+    output:
+        "alignment/fragments/fragsizes.tsv"
+    shell: """
+        cat {input} > {output}
+        """
+
+rule plot_fragsizes:
+    input:
+        table = "alignment/fragments/fragsizes.tsv"
+    output:
+        plot = "qual_ctrl/frag-size-dist.png"
+    script:
+        "scripts/plotfragsizedist.R"
+
+rule make_fragments_table:
+    input:
+        expand("alignment/fragments/{sample}-fragments.bedpe", sample=SAMPLES)
+    output:
+        "qual_ctrl/fragment_counts.txt"
+    shell: """
+        wc -l {input} > {output}
+        """
+#note: to retrieve number of fragments in a sample, | grep {sample} qual_ctrl/fragment_counts.txt | cut -f3 -d ' '
 
 rule midpoint_coverage:
     input:
-        bam = "alignment/{sample}.bam",
-        index = "alignment/{sample}.bam.bai"
+        bedpe = "alignment/fragments/{sample}-fragments.bedpe",
+        chrsizes = config["genome"]["chrsizes"]
     output:
-        "coverage/{sample}-midpoint-coverage-RPM.bedgraph"
-    params:
-        minsize = config["bowtie"]["min_ins"],
-        maxsize = config["bowtie"]["max_ins"]
-    threads: config["threads"]
-    log: "logs/deeptools/{sample}-midpoint-coverage-RPM.log"
+        "coverage/{sample}-midpoint-counts.bedgraph"
     shell: """
-        (bamCoverage -b {input.bam} -o {output} -of bedgraph --MNase -bs 1 -p {threads} --normalizeUsingRPKM --minFragmentLength {params.minsize} --maxFragmentLength {params.maxsize}) &> {log}
-        """
-
-rule midpoint_coverage_smoothed:
-    input:
-        bam = "alignment/{sample}.bam",
-        index = "alignment/{sample}.bam.bai"
-    output:
-        "coverage/{sample}-midpoint-coverage-smoothed-RPM.bedgraph"
-    params:
-        minsize = config["bowtie"]["min_ins"],
-        maxsize = config["bowtie"]["max_ins"],
-        smoothwindow = config["coverage"]["smooth_window"]
-    threads: config["threads"]
-    log: "logs/deeptools/{sample}-midpoint-coverage-smoothed-RPM.bedgraph"
-    shell: """
-        (bamCoverage -b {input.bam} -o {output} -of bedgraph --MNase -bs 1 -p {threads} --normalizeUsingRPKM --minFragmentLength {params.minsize} --maxFragmentLength {params.maxsize} --smoothLength {params.smoothwindow}) &> {log}
+        awk 'BEGIN{{FS=OFS="\t"}} width=$6-$2 {{if(width % 2 != 0){{width -= 1}}; mid=$2+width/2; print $1, mid, mid+1, $7}}' {input.bedpe} | sort -k1,1 -k2,2n | bedtools genomecov -i stdin -g {input.chrsizes} -bga > {output}
         """
 
 rule total_coverage:
     input:
         bam = "alignment/{sample}.bam",
-        index = "alignment/{sample}.bam.bai"
-    output:
-        "coverage/{sample}-total-coverage-RPM.bedgraph"
-    params:
-        minsize = config["bowtie"]["min_ins"],
-        maxsize = config["bowtie"]["max_ins"]
-    threads: config["threads"]
-    log: "logs/deeptools/{sample}-total-coverage-RPM.bedgraph"
-    shell: """
-        (bamCoverage -b {input.bam} -o {output} -of bedgraph --extendReads -bs 1 -p {threads} --normalizeUsingRPKM --minFragmentLength {params.minsize} --maxFragmentLength {params.maxsize}) &> {log}
-        """
-
-rule bedgraph_to_bigwig:
-    input:
-        bedgraph = "coverage/{sample}-midpoint-coverage-RPM.bedgraph",
         chrsizes = config["genome"]["chrsizes"]
     output:
-        "coverage/bigwig/{sample}-midpoint-coverage-RPM.bw"
+        "coverage/{sample}-total-counts.bedgraph"
     shell: """
-        bedGraphToBigWig {input.bedgraph} {input.chrsizes} {output}
+        bedtools genomecov -ibam {input.bam} -g {input.chrsizes} -bga -pc > {output}
         """
 
-rule deeptools_multibw_summary:
+rule seq_depth_norm:
     input:
-        expand("coverage/bigwig/{sample}-midpoint-coverage-RPM.bw", sample=SAMPLES)
+        midpoint = "coverage/{sample}-midpoint-counts.bedgraph",
+        total = "coverage/{sample}-total-counts.bedgraph",
+        nfrags = "qual_ctrl/fragment_counts.txt"
     output:
-        matrix = "correlations/midpoint-coverage-RPM.npz",
-        values = "correlations/midpoint-coverage-RPM.tsv"
+        midpoint = "coverage/{sample}-midpoint-CPM.bedgraph",
+        total = "coverage/{sample}-total-CPM.bedgraph"
+    shell: """
+        {wildcards.sample}norm=$(grep {wildcards.sample} {input.nfrags} | cut -f3 -d ' ')
+        awk -v norm=${wildcards.sample}norm 'BEGIN{{FS=OFS="\t"}}{{print $1, $2, $3, $4*1000000/norm}}' {input.midpoint} > {output.midpoint}
+        awk -v norm=${wildcards.sample}norm 'BEGIN{{FS=OFS="\t"}}{{print $1, $2, $3, $4*1000000/norm}}' {input.total} > {output.total}
+        """
+
+rule make_window_file:
+    input:
+        chrsizes = config["genome"]["chrsizes"]
+    output:
+        temp("genome/windows.bed")
+    params:
+        wsize = config["corr-binsize"]
+    shell: """
+        bedtools makewindows -g {input.chrsizes} -w {params.wsize} | sort -k1,1 -k2,2n > {output}
+        """
+
+rule map_to_windows:
+    input:
+        bed = "genome/windows.bed",
+        bedgraph = "coverage/{sample}-midpoint-CPM.bedgraph"
+    output:
+        temp("coverage/.{sample}-maptowindow.tsv")
+    shell: """
+        bedtools map -c 4 -o sum -a {input.bed} -b {input.bedgraph} | cut -f4 > {output}
+        """
+
+rule cat_windows:
+    input:
+        values = expand("coverage/.{sample}-maptowindow.tsv", sample=SAMPLES),
+        coord = "genome/windows.bed"
+    output:
+        "correlations/midpoint-CPM-windows.tsv"
     params:
         labels = list(config["barcodes"].keys()),
-        binsize = config["corr-binsize"]
-    threads: config["threads"]
-    log: "logs/deeptools/multibw_summary.log"
     shell: """
-        (multiBigwigSummary bins -b {input} -out {output.matrix} --labels {params.labels} -bs {params.binsize} -p {threads} --outRawCounts {output.values}) &> {log}
+        echo -e "chr\tstart\tend\t{params.labels}\n$(paste {input.coord} {input.values})" > {output}
         """
+
+                
+        
+
+
+
+
+
+
+#rule deeptools_multibw_summary:
+#    input:
+#        expand("coverage/bigwig/{sample}-midpoint-coverage-RPM.bw", sample=SAMPLES)
+#    output:
+#        matrix = "correlations/midpoint-coverage-RPM.npz",
+#        values = "correlations/midpoint-coverage-RPM.tsv"
+#    params:
+#        labels = list(config["barcodes"].keys()),
+#        binsize = config["corr-binsize"]
+#    threads: config["threads"]
+#    log: "logs/deeptools/multibw_summary.log"
+#    shell: """
+#        (multiBigwigSummary bins -b {input} -out {output.matrix} --labels {params.labels} -bs {params.binsize} -p {threads} --outRawCounts {output.values}) &> {log}
+#        """
 
 
 
