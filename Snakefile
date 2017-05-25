@@ -37,6 +37,7 @@ rule all:
         "qual_ctrl/frag-size-dist.png",
         expand("nucwave/{sample}/{sample}_depth_wl_trimmed_PE.wig", sample=SAMPLES),
         expand("coverage/{sample}-midpoint-CPM.bedgraph", sample=SAMPLES),
+        "correlations/pca-scree.png"
 
 rule make_barcode_file:
     output:
@@ -151,6 +152,7 @@ rule bowtie:
        "logs/bowtie/bowtie-align-{sample}.log"
     shell: """
         (bowtie -v {params.max_mismatch} -I {params.min_ins} -X {params.max_ins} --fr --nomaqround --best -S -p {threads} --un alignment/unaligned-{wildcards.sample}.fastq {params.outbase} -1 {input.r1} -2 {input.r2} | samtools view -buh -f 0x2 - | samtools sort -T {wildcards.sample} -@ {threads} -o {output.bam} -) &> {log}
+        pigz -p {threads} alignment/unaligned*
         """
 
 rule samtools_index:
@@ -320,7 +322,20 @@ rule cat_windows:
         echo -e "chr\tstart\tend\t{params.labels}\n$(paste {input.coord} {input.values})" > {output}
         """
 
+rule plot_correlations:
+    input:
+        "correlations/midpoint-CPM-windows.tsv"
+    output:
+        scatter = "correlations/pairwise-scatterplots.png",
+        dists_cluster = "correlations/sample-dists-clustered.png",
+        dists_nocluster = "correlations/sample-dists-unclustered.png",
+        pca = "correlations/pca.png",
+        scree = "correlations/pca-scree.png"
+    script:
+        "scripts/plotcorrelations.R"
                 
+
+
         
 
 

@@ -1,16 +1,18 @@
 barcodes.tsv
 fastq/*
 genome/*
-logs/*
+logs/
 .snakemake/
 alignment/
 coverage/
 nucwave/
 qual_ctrl/
 correlations/
+heatmaps/
 
 config.yaml
 
 
 !fastq/.gitkeep
 !genome/.gitkeep
+!heatmaps/.gitkeep
