@@ -9,10 +9,10 @@ nucwave/
 qual_ctrl/
 correlations/
 heatmaps/
+scripts/.snakemake*
 
 config.yaml
 
 
 !fastq/.gitkeep
 !genome/.gitkeep
-!heatmaps/.gitkeep

@@ -17,7 +17,8 @@ localrules: all,
             seq_depth_norm,
             make_window_file,
             map_to_windows,
-            cat_windows
+            cat_windows,
+            cat_perbase_depth
 #requirements
 # seq/ea-utils/
 # UNLOAD seq/cutadapt/1.11
@@ -27,7 +28,7 @@ localrules: all,
 # pip install numpy PyWavelets
 # pip install deeptools
 # UNLOAD deeptools, pysam
-
+# UNLOAD stats/R/3.2.1, load stats/R/3.3.1
 rule all:
     input:
         "qual_ctrl/raw",
@@ -35,9 +36,11 @@ rule all:
         "qual_ctrl/coverage.tsv",
         "qual_ctrl/coverage.png",
         "qual_ctrl/frag-size-dist.png",
+        "qual_ctrl/seq-depth-dist.png",
         expand("nucwave/{sample}/{sample}_depth_wl_trimmed_PE.wig", sample=SAMPLES),
         expand("coverage/{sample}-midpoint-CPM.bedgraph", sample=SAMPLES),
-        "correlations/pca-scree.png"
+        "correlations/pca-scree.png",
+        expand("heatmaps/{sample}-heatmap.png", sample=SAMPLES)
 
 rule make_barcode_file:
     output:
@@ -152,7 +155,8 @@ rule bowtie:
        "logs/bowtie/bowtie-align-{sample}.log"
     shell: """
         (bowtie -v {params.max_mismatch} -I {params.min_ins} -X {params.max_ins} --fr --nomaqround --best -S -p {threads} --un alignment/unaligned-{wildcards.sample}.fastq {params.outbase} -1 {input.r1} -2 {input.r2} | samtools view -buh -f 0x2 - | samtools sort -T {wildcards.sample} -@ {threads} -o {output.bam} -) &> {log}
-        pigz -p {threads} alignment/unaligned*
+        pigz -p {threads} alignment/unaligned-{wildcards.sample}*.fastq
+        pigz -p {threads} fastq/trimmed/{wildcards.sample}*.fastq
         """
 
 rule samtools_index:
@@ -161,9 +165,9 @@ rule samtools_index:
     output:
         "alignment/{sample}.bam.bai"
     log:
-        "logs/samtools_index.log"
+        "logs/samtools_index/samtools_index-{sample}.log"
     shell: """
-        samtools index -b {input} 
+        (samtools index -b {input}) &> {log}
         """
 
 rule deeptools_plotcoverage:
@@ -187,8 +191,9 @@ rule build_nucwave_input:
        "alignment/{sample}.bam" 
     output:
        "alignment/{sample}.bowtie"
+    log : "logs/build_nucwave_input/nucwave_input-{sample}.log"
     shell: """
-        samtools view {input} | awk 'BEGIN{{FS=OFS="\t"}} ($2==163) || ($2==99) {{print "+", $3, $4-1, $10}} ($2==83) || ($2==147) {{print "-", $3, $4-1, $10}}' > {output}
+        (samtools view {input} | awk 'BEGIN{{FS=OFS="\t"}} ($2==163) || ($2==99) {{print "+", $3, $4-1, $10}} ($2==83) || ($2==147) {{print "-", $3, $4-1, $10}}' > {output}) &> {log}
         """
 
 rule nucwave:
@@ -215,8 +220,9 @@ rule get_fragments:
     output:
         "alignment/fragments/{sample}-fragments.bedpe"
     threads: config["threads"]
+    log : "logs/get_fragments/get_fragments-{sample}.log"
     shell: """
-        samtools sort -n -@ {threads} {input.bam} | bedtools bamtobed -bedpe -i stdin > {output}
+        (samtools sort -n -@ {threads} {input.bam} | bedtools bamtobed -bedpe -i stdin > {output}) &> {log}
         """
 
 rule get_fragsizes:
@@ -224,8 +230,9 @@ rule get_fragsizes:
         "alignment/fragments/{sample}-fragments.bedpe"
     output:
         temp("alignment/fragments/.{sample}-fragsizes.tsv")
+    log : "logs/get_fragsizes/get_fragsizes-{sample}.log"
     shell: """
-        awk -v sample={wildcards.sample} 'BEGIN{{FS=OFS="\t"}}{{print sample , $6-$2}}' {input} > {output}
+        (awk -v sample={wildcards.sample} 'BEGIN{{FS=OFS="\t"}}{{print sample , $6-$2}}' {input} > {output}) &> {log}
         """
 
 rule cat_fragsizes:
@@ -255,14 +262,45 @@ rule make_fragments_table:
         """
 #note: to retrieve number of fragments in a sample, | grep {sample} qual_ctrl/fragment_counts.txt | cut -f3 -d ' '
 
+rule get_perbase_depth:
+    input:
+        bam = "alignment/{sample}.bam",
+        chrsizes = config["genome"]["chrsizes"]
+    output:
+        temp("qual_ctrl/.{sample}-depth.tsv")
+    shell: """
+        bedtools genomecov -ibam {input.bam} -g {input.chrsizes} -d -pc | awk -v sample={wildcards.sample} 'BEGIN{{FS=OFS="\t"; srand()}} !/^$/ {{if (rand()<= .08) print sample, $3}}' > {output}
+        """
+
+rule cat_perbase_depth:
+    input:
+        expand("qual_ctrl/.{sample}-depth.tsv", sample=SAMPLES)
+    output:
+        "qual_ctrl/perbasedepth.tsv.gz"
+    #params:
+    #    labels = list(SAMPLES.keys())
+    shell: """
+        cat {input} | gzip > {output}  
+        """
+
+rule plot_depth:
+    input:
+        "qual_ctrl/perbasedepth.tsv.gz"
+    output:
+        "qual_ctrl/seq-depth-dist.png"
+    script:
+        "scripts/plotCoverage.R"
+
+
 rule midpoint_coverage:
     input:
         bedpe = "alignment/fragments/{sample}-fragments.bedpe",
         chrsizes = config["genome"]["chrsizes"]
     output:
         "coverage/{sample}-midpoint-counts.bedgraph"
+    log: "logs/midpoint_coverage/midpoint_coverage-{sample}.log"
     shell: """
-        awk 'BEGIN{{FS=OFS="\t"}} width=$6-$2 {{if(width % 2 != 0){{width -= 1}}; mid=$2+width/2; print $1, mid, mid+1, $7}}' {input.bedpe} | sort -k1,1 -k2,2n | bedtools genomecov -i stdin -g {input.chrsizes} -bga > {output}
+        (awk 'BEGIN{{FS=OFS="\t"}} width=$6-$2 {{if(width % 2 != 0){{width -= 1}}; mid=$2+width/2; print $1, mid, mid+1, $7}}' {input.bedpe} | sort -k1,1 -k2,2n | bedtools genomecov -i stdin -g {input.chrsizes} -bga | sortBed -i stdin > {output}) &> {log}
         """
 
 rule total_coverage:
@@ -271,8 +309,9 @@ rule total_coverage:
         chrsizes = config["genome"]["chrsizes"]
     output:
         "coverage/{sample}-total-counts.bedgraph"
+    log : "logs/total_coverage/total_coverage-{sample}.log"
     shell: """
-        bedtools genomecov -ibam {input.bam} -g {input.chrsizes} -bga -pc > {output}
+        (bedtools genomecov -ibam {input.bam} -g {input.chrsizes} -bga -pc | sortBed -i stdin > {output}) &> {log}
         """
 
 rule seq_depth_norm:
@@ -283,10 +322,11 @@ rule seq_depth_norm:
     output:
         midpoint = "coverage/{sample}-midpoint-CPM.bedgraph",
         total = "coverage/{sample}-total-CPM.bedgraph"
+    log : "logs/seq_depth_norm/depthnorm-{sample}.log"
     shell: """
         {wildcards.sample}norm=$(grep {wildcards.sample} {input.nfrags} | cut -f3 -d ' ')
-        awk -v norm=${wildcards.sample}norm 'BEGIN{{FS=OFS="\t"}}{{print $1, $2, $3, $4*1000000/norm}}' {input.midpoint} > {output.midpoint}
-        awk -v norm=${wildcards.sample}norm 'BEGIN{{FS=OFS="\t"}}{{print $1, $2, $3, $4*1000000/norm}}' {input.total} > {output.total}
+        (awk -v norm=${wildcards.sample}norm 'BEGIN{{FS=OFS="\t"}}{{print $1, $2, $3, $4*1000000/norm}}' {input.midpoint} > {output.midpoint}) &> {log}
+        (awk -v norm=${wildcards.sample}norm 'BEGIN{{FS=OFS="\t"}}{{print $1, $2, $3, $4*1000000/norm}}' {input.total} > {output.total}) &>> {log}
         """
 
 rule make_window_file:
@@ -296,8 +336,9 @@ rule make_window_file:
         temp("genome/windows.bed")
     params:
         wsize = config["corr-binsize"]
+    log: "logs/bedtools_make_window_file.log"
     shell: """
-        bedtools makewindows -g {input.chrsizes} -w {params.wsize} | sort -k1,1 -k2,2n > {output}
+        (bedtools makewindows -g {input.chrsizes} -w {params.wsize} | sortBed -i stdin > {output}) &> {log}
         """
 
 rule map_to_windows:
@@ -306,8 +347,9 @@ rule map_to_windows:
         bedgraph = "coverage/{sample}-midpoint-CPM.bedgraph"
     output:
         temp("coverage/.{sample}-maptowindow.tsv")
+    log : "logs/bedtools_map_to_windows/bedtools_map-{sample}.log"
     shell: """
-        bedtools map -c 4 -o sum -a {input.bed} -b {input.bedgraph} | cut -f4 > {output}
+        (bedtools map -c 4 -o sum -a {input.bed} -b {input.bedgraph} | cut -f4 > {output}) &> {log}
         """
 
 rule cat_windows:
@@ -334,35 +376,54 @@ rule plot_correlations:
     script:
         "scripts/plotcorrelations.R"
                 
+rule make_bigwig_for_deeptools:
+    input:
+        bg = "coverage/{sample}-midpoint-CPM.bedgraph",
+        chrsizes = config["genome"]["chrsizes"]
+    output:
+        "heatmaps/{sample}-midpoint-CPM.bw"
+    log: "logs/make_bigwig_for_deeptools/make_bw-{sample}.log"
+    shell: """
+        (bedGraphToBigWig {input.bg} {input.chrsizes} {output}) &> {log}
+        """
 
+rule deeptools_matrix:
+    input:
+        annotation = config["genome"]["annotation"],
+        bw = "heatmaps/{sample}-midpoint-CPM.bw"
+    output:
+        dtfile = "heatmaps/{sample}.mat.gz",
+        matrix = "heatmaps/{sample}.tsv"
+    params:
+        refpoint = config["heatmaps"]["refpoint"],
+        upstream = config["heatmaps"]["upstream"],
+        dnstream = config["heatmaps"]["dnstream"],
+        binsize = config["heatmaps"]["binsize"],
+        sort = config["heatmaps"]["sort"],
+        sortusing = config["heatmaps"]["sortby"],
+        binstat = config["heatmaps"]["binstat"]
+    threads : config["threads"]
+    log: "logs/deeptools/computeMatrix-{sample}.log"
+    shell: """
+        (computeMatrix reference-point -R {input.annotation} -S {input.bw} --referencePoint {params.refpoint} -out {output.dtfile} --outFileNameMatrix {output.matrix} -b {params.upstream} -a {params.dnstream} --nanAfterEnd --sortRegions {params.sort} --sortUsing {params.sortusing} --averageTypeBins {params.binstat} -p {threads}) &> {log}
+        """
 
-        
-
-
-
-
-
-
-#rule deeptools_multibw_summary:
-#    input:
-#        expand("coverage/bigwig/{sample}-midpoint-coverage-RPM.bw", sample=SAMPLES)
-#    output:
-#        matrix = "correlations/midpoint-coverage-RPM.npz",
-#        values = "correlations/midpoint-coverage-RPM.tsv"
-#    params:
-#        labels = list(config["barcodes"].keys()),
-#        binsize = config["corr-binsize"]
-#    threads: config["threads"]
-#    log: "logs/deeptools/multibw_summary.log"
-#    shell: """
-#        (multiBigwigSummary bins -b {input} -out {output.matrix} --labels {params.labels} -bs {params.binsize} -p {threads} --outRawCounts {output.values}) &> {log}
-#        """
-
-
-
-
-
-
-
-
-
+rule r_plotHeatmap:
+    input:
+        matrix = "heatmaps/{sample}.tsv"
+    output:
+        "heatmaps/{sample}-heatmap.png"
+    params:
+        binsize = config["heatmaps"]["binsize"],
+        upstream = config["heatmaps"]["upstream"],
+        dnstream = config["heatmaps"]["dnstream"],
+        figunits = config["heatmaps"]["figunits"],
+        figwidth = config["heatmaps"]["figwidth"],
+        figheight = config["heatmaps"]["figheight"],
+        cmap = config["heatmaps"]["colormap"],
+        refpointlabel = config["heatmaps"]["refpointlabel"],
+        ylabel = config["heatmaps"]["ylabel"]
+    log: "logs/r_plotHeatmap-{sample}.log"
+    script:
+        "scripts/plotHeatmap.R"
+ 
