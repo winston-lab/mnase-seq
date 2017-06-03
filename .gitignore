@@ -9,6 +9,7 @@ nucwave/
 qual_ctrl/
 correlations/
 heatmaps/
+metagene/
 scripts/.snakemake*
 
 config.yaml

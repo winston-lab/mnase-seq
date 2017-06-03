@@ -1,0 +1,94 @@
+__default__ : 
+    queue : "short"
+    time : "11:50"
+    n : 1
+
+fastqc_raw:
+    time : "3:00"
+    n : 4
+    mem : 2000
+
+demultiplex:
+    time : "6:00"
+    mem : 4000
+
+cutadapt:
+    time : "2:00"
+    mem : 1000 
+
+fastqc_processed:
+    time : "2:00"
+    mem : 4000
+
+bowtie:
+    time : "4:00"
+    n : 4
+    mem : 2000
+
+gzip_loose_fastq:
+    time : "3:00"
+    n : 4
+
+deeptools_plotcoverage:
+    time : "11:50"
+    n : 4
+    mem : 3000
+
+nucwave:
+    time : "2:00"
+    mem : 3000
+
+get_fragments:
+    time : "2:00"
+    n : 4
+    mem : 1000
+
+plot_fragsizes:
+    time : "2:00"
+    mem : 4000
+
+get_perbase_depth:
+    time : "1:00"
+    mem : 1000
+
+plot_depth:
+    time : "2:00"
+    mem : 4000
+
+midpoint_coverage:
+    time : "2:00"
+    mem : 2000
+
+total_coverage:
+    time : "2:00"
+    mem : 2000 
+
+map_to_windows:
+    time : "2:00"
+    mem : 4000
+
+plot_correlations:
+    time : "11:59"
+    mem : 20000
+
+deeptools_matrix:
+    time : "2:00"
+    n : 4
+    mem : 2000
+
+r_plotHeatmap:
+    time : "11:50"
+    mem : 10000
+
+cat_matrices:
+    time : "2:00"
+    mem : 2000
+
+plot_indiv_metagene:
+    time : "11:50"
+    mem : 3000
+
+plot_combined_metagene:
+    queue : "medium"
+    time : "96:00"
+    mem : 20000 

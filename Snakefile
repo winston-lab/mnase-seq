@@ -12,13 +12,13 @@ localrules: all,
             get_fragsizes,
             cat_fragsizes,
             make_fragments_table,
-            midpoint_coverage,
-            total_coverage,
-            seq_depth_norm,
             make_window_file,
-            map_to_windows,
             cat_windows,
-            cat_perbase_depth
+            cat_perbase_depth,
+            seq_depth_norm,
+            make_bigwig_for_deeptools,
+            melt_matrix,
+            gzip_deeptools_table
 #requirements
 # seq/ea-utils/
 # UNLOAD seq/cutadapt/1.11
@@ -32,15 +32,17 @@ localrules: all,
 rule all:
     input:
         "qual_ctrl/raw",
-        expand("qual_ctrl/trim-{sample}", sample=SAMPLES), 
-        "qual_ctrl/coverage.tsv",
-        "qual_ctrl/coverage.png",
+        #"qual_ctrl/coverage.tsv",
+        #"qual_ctrl/coverage.png",
         "qual_ctrl/frag-size-dist.png",
         "qual_ctrl/seq-depth-dist.png",
         expand("nucwave/{sample}/{sample}_depth_wl_trimmed_PE.wig", sample=SAMPLES),
         expand("coverage/{sample}-midpoint-CPM.bedgraph", sample=SAMPLES),
         "correlations/pca-scree.png",
-        expand("heatmaps/{sample}-heatmap.png", sample=SAMPLES)
+        expand("heatmaps/{annotation}/{annotation}-{sample}-heatmap.png", annotation=config["annotations"], sample=SAMPLES),
+        expand("alignment/unaligned-{sample}_2.fastq.gz", sample=SAMPLES),
+        expand("metagene/{annotation}/{annotation}-{sample}-metagene.png", annotation = config["annotations"], sample=SAMPLES),
+        #expand("metagene/{annotation}/{annotation}-allsamples.png", annotation = config["annotations"])
 
 rule make_barcode_file:
     output:
@@ -62,8 +64,8 @@ rule fastqc_raw:
     threads : config["threads"]
     log : "logs/fastqc/fastqc-raw.log"
     shell: """
-        mkdir {output}
-        (fastqc -o {output} --noextract -t {threads} {input.r1} {input.r2} ) &> {log}
+        mkdir -p {output}
+        (fastqc -o {output} --noextract -t {threads} {input.r1} {input.r2}) &> {log}
         """
 
 rule demultiplex:
@@ -93,8 +95,8 @@ rule cutadapt:
         r1 = "fastq/{sample}.r1.fastq.gz",
         r2 = "fastq/{sample}.r2.fastq.gz"
     output:
-        r1 = "fastq/trimmed/{sample}-trim.r1.fastq",
-        r2 = "fastq/trimmed/{sample}-trim.r2.fastq"
+        r1 = temp("fastq/trimmed/{sample}-trim.r1.fastq"),
+        r2 = temp("fastq/trimmed/{sample}-trim.r2.fastq")
     params:
         qual_cutoff = config["cutadapt"]["qual_cutoff"],
         adapter = lambda wildcards : SAMPLES[wildcards.sample]+"T"
@@ -110,12 +112,13 @@ rule fastqc_processed:
         r1 = "fastq/trimmed/{sample}-trim.r1.fastq",
         r2 = "fastq/trimmed/{sample}-trim.r2.fastq"
     output:
-        "qual_ctrl/trim-{sample}"
+        "qual_ctrl/trim-{sample}/{sample}-trim.r1_fastqc.html",
+        "qual_ctrl/trim-{sample}/{sample}-trim.r2_fastqc.html"
     threads : config["threads"]
     log : "logs/fastqc/fastqc-trim-{sample}.log"
     shell: """
-        mkdir {output}
-        (fastqc -o {output} --noextract -t {threads} {input.r1} {input.r2}) &> {log}
+        mkdir -p {output}
+        (fastqc -o qual_ctrl/trim-{wildcards.sample} --noextract -t {threads} {input.r1} {input.r2}) &> {log}
         """
 
 #build bowtie index for genome
@@ -125,10 +128,10 @@ rule bowtie_build:
     input:
         fasta = config["genome"]["fasta"]
     output:
-        expand("genome/" + basename + ".{n}.ebwt", n=[1,2,3,4]),
-        expand("genome/" + basename + ".rev.{n}.ebwt", n=[1,2])
+        expand("../genome/bowtie1_indexes/" + basename + ".{n}.ebwt", n=[1,2,3,4]),
+        expand("../genome/bowtie1_indexes/" + basename + ".rev.{n}.ebwt", n=[1,2])
     params:
-        outbase = "genome/" + basename
+        outbase = "../genome/bowtie1_indexes/" + basename
     log:
         "logs/bowtie/bowtie-build.log"    
     shell: """
@@ -139,15 +142,17 @@ rule bowtie_build:
 #in Christine's paper, Burak uses -m 10 --best
 rule bowtie:
     input:
-        expand("genome/" + basename + ".{n}.ebwt", n=[1,2,3,4]),
-        expand("genome/" + basename + ".rev.{n}.ebwt", n=[1,2]),
+        expand("../genome/bowtie1_indexes/" + basename + ".{n}.ebwt", n=[1,2,3,4]),
+        expand("../genome/bowtie1_indexes/" + basename + ".rev.{n}.ebwt", n=[1,2]),
         r1 = "fastq/trimmed/{sample}-trim.r1.fastq",
         r2 = "fastq/trimmed/{sample}-trim.r2.fastq"
     output:
-        bam ="alignment/{sample}.bam"
+        bam ="alignment/{sample}.bam",
+        unaligned_1 = temp("alignment/unaligned-{sample}_1.fastq"),
+        unaligned_2 = temp("alignment/unaligned-{sample}_2.fastq")
     threads: config["threads"]
     params:
-        outbase = "genome/" + basename,
+        outbase = "../genome/bowtie1_indexes/" + basename,
         max_mismatch = config["bowtie"]["max_mismatch"],
         min_ins = config["bowtie"]["min_ins"],
         max_ins = config["bowtie"]["max_ins"]
@@ -155,9 +160,30 @@ rule bowtie:
        "logs/bowtie/bowtie-align-{sample}.log"
     shell: """
         (bowtie -v {params.max_mismatch} -I {params.min_ins} -X {params.max_ins} --fr --nomaqround --best -S -p {threads} --un alignment/unaligned-{wildcards.sample}.fastq {params.outbase} -1 {input.r1} -2 {input.r2} | samtools view -buh -f 0x2 - | samtools sort -T {wildcards.sample} -@ {threads} -o {output.bam} -) &> {log}
-        pigz -p {threads} alignment/unaligned-{wildcards.sample}*.fastq
-        pigz -p {threads} fastq/trimmed/{wildcards.sample}*.fastq
         """
+
+rule gzip_loose_fastq:
+    input:
+        "alignment/{sample}.bam",
+        "qual_ctrl/trim-{sample}/{sample}-trim.r1_fastqc.html",
+        "qual_ctrl/trim-{sample}/{sample}-trim.r2_fastqc.html",
+        trim_r1 = "fastq/trimmed/{sample}-trim.r1.fastq",
+        trim_r2 = "fastq/trimmed/{sample}-trim.r2.fastq",
+        unaligned_r1 = "alignment/unaligned-{sample}_1.fastq",
+        unaligned_r2 = "alignment/unaligned-{sample}_2.fastq"
+    output:
+        trim_r1 = "fastq/trimmed/{sample}-trim.r1.fastq.gz",
+        trim_r2 = "fastq/trimmed/{sample}-trim.r2.fastq.gz",
+        unaligned_r1 = "alignment/unaligned-{sample}_1.fastq.gz",
+        unaligned_r2 = "alignment/unaligned-{sample}_2.fastq.gz"
+    threads : config["threads"]
+    shell: """
+        pigz -fk {input.trim_r1}
+        pigz -fk {input.trim_r2}
+        pigz -fk {input.unaligned_r1}
+        pigz -fk {input.unaligned_r2}
+        """
+        
 
 rule samtools_index:
     input:
@@ -232,7 +258,7 @@ rule get_fragsizes:
         temp("alignment/fragments/.{sample}-fragsizes.tsv")
     log : "logs/get_fragsizes/get_fragsizes-{sample}.log"
     shell: """
-        (awk -v sample={wildcards.sample} 'BEGIN{{FS=OFS="\t"}}{{print sample , $6-$2}}' {input} > {output}) &> {log}
+        (awk -v sample={wildcards.sample} 'BEGIN{{FS=OFS="\t"; srand()}} !/^$/ {{if (rand()<= .08) print sample , $6-$2}}' {input} > {output}) &> {log}
         """
 
 rule cat_fragsizes:
@@ -268,8 +294,9 @@ rule get_perbase_depth:
         chrsizes = config["genome"]["chrsizes"]
     output:
         temp("qual_ctrl/.{sample}-depth.tsv")
+    log: "logs/get_perbase_depth/perbase_depth-{sample}.log"
     shell: """
-        bedtools genomecov -ibam {input.bam} -g {input.chrsizes} -d -pc | awk -v sample={wildcards.sample} 'BEGIN{{FS=OFS="\t"; srand()}} !/^$/ {{if (rand()<= .08) print sample, $3}}' > {output}
+        (bedtools genomecov -ibam {input.bam} -g {input.chrsizes} -d -pc | awk -v sample={wildcards.sample} 'BEGIN{{FS=OFS="\t"; srand()}} !/^$/ {{if (rand()<= .08) print sample, $3}}' > {output}) &> {log}
         """
 
 rule cat_perbase_depth:
@@ -280,7 +307,7 @@ rule cat_perbase_depth:
     #params:
     #    labels = list(SAMPLES.keys())
     shell: """
-        cat {input} | gzip > {output}  
+        cat {input} | gzip -f > {output}  
         """
 
 rule plot_depth:
@@ -324,9 +351,9 @@ rule seq_depth_norm:
         total = "coverage/{sample}-total-CPM.bedgraph"
     log : "logs/seq_depth_norm/depthnorm-{sample}.log"
     shell: """
-        {wildcards.sample}norm=$(grep {wildcards.sample} {input.nfrags} | cut -f3 -d ' ')
-        (awk -v norm=${wildcards.sample}norm 'BEGIN{{FS=OFS="\t"}}{{print $1, $2, $3, $4*1000000/norm}}' {input.midpoint} > {output.midpoint}) &> {log}
-        (awk -v norm=${wildcards.sample}norm 'BEGIN{{FS=OFS="\t"}}{{print $1, $2, $3, $4*1000000/norm}}' {input.total} > {output.total}) &>> {log}
+        norm=$(grep /{wildcards.sample} {input.nfrags} | awk '{{print $1}}')
+        (awk -v anorm=$norm 'BEGIN{{FS=OFS="\t"}}{{print $1, $2, $3, $4*1000000/anorm}}' {input.midpoint} > {output.midpoint}) &>> {log}
+        (awk -v anorm=$norm 'BEGIN{{FS=OFS="\t"}}{{print $1, $2, $3, $4*1000000/anorm}}' {input.total} > {output.total}) &>> {log}
         """
 
 rule make_window_file:
@@ -381,7 +408,7 @@ rule make_bigwig_for_deeptools:
         bg = "coverage/{sample}-midpoint-CPM.bedgraph",
         chrsizes = config["genome"]["chrsizes"]
     output:
-        "heatmaps/{sample}-midpoint-CPM.bw"
+        "coverage/bw/{sample}-midpoint-CPM.bw"
     log: "logs/make_bigwig_for_deeptools/make_bw-{sample}.log"
     shell: """
         (bedGraphToBigWig {input.bg} {input.chrsizes} {output}) &> {log}
@@ -389,41 +416,94 @@ rule make_bigwig_for_deeptools:
 
 rule deeptools_matrix:
     input:
-        annotation = config["genome"]["annotation"],
-        bw = "heatmaps/{sample}-midpoint-CPM.bw"
+        annotation = lambda wildcards: config["annotations"][wildcards.annotation]["path"],
+        bw = "coverage/bw/{sample}-midpoint-CPM.bw"
     output:
-        dtfile = "heatmaps/{sample}.mat.gz",
-        matrix = "heatmaps/{sample}.tsv"
+        dtfile = "heatmaps/{annotation}/{annotation}-{sample}.mat.gz",
+        matrix = temp("heatmaps/{annotation}/{annotation}-{sample}.tsv")
     params:
-        refpoint = config["heatmaps"]["refpoint"],
-        upstream = config["heatmaps"]["upstream"],
-        dnstream = config["heatmaps"]["dnstream"],
-        binsize = config["heatmaps"]["binsize"],
-        sort = config["heatmaps"]["sort"],
-        sortusing = config["heatmaps"]["sortby"],
-        binstat = config["heatmaps"]["binstat"]
+        refpoint = lambda wildcards: config["annotations"][wildcards.annotation]["refpoint"],
+        upstream = lambda wildcards: config["annotations"][wildcards.annotation]["upstream"],
+        dnstream = lambda wildcards: config["annotations"][wildcards.annotation]["dnstream"],
+        binsize = lambda wildcards: config["annotations"][wildcards.annotation]["binsize"],
+        sort = lambda wildcards: config["annotations"][wildcards.annotation]["sort"],
+        sortusing = lambda wildcards: config["annotations"][wildcards.annotation]["sortby"],
+        binstat = lambda wildcards: config["annotations"][wildcards.annotation]["binstat"]
     threads : config["threads"]
-    log: "logs/deeptools/computeMatrix-{sample}.log"
+    log: "logs/deeptools/computeMatrix-{annotation}-{sample}.log"
     shell: """
         (computeMatrix reference-point -R {input.annotation} -S {input.bw} --referencePoint {params.refpoint} -out {output.dtfile} --outFileNameMatrix {output.matrix} -b {params.upstream} -a {params.dnstream} --nanAfterEnd --sortRegions {params.sort} --sortUsing {params.sortusing} --averageTypeBins {params.binstat} -p {threads}) &> {log}
+        """
+    #shell: """
+    #    (computeMatrix reference-point -R {input.annotation} -S {input.bw} --referencePoint {params.refpoint} -out {output.dtfile} --outFileNameMatrix {output.matrix} -b {params.upstream} -a {params.dnstream} --sortRegions {params.sort} --averageTypeBins {params.binstat} -p {threads}) &> {log}
+    #    """
+
+rule gzip_deeptools_table:
+    input:
+        "heatmaps/{annotation}/{annotation}-{sample}.tsv"
+    output:
+        "heatmaps/{annotation}/{annotation}-{sample}.tsv.gz"
+    shell: """
+        pigz -f {input}
         """
 
 rule r_plotHeatmap:
     input:
-        matrix = "heatmaps/{sample}.tsv"
+        matrix = "heatmaps/{annotation}/{annotation}-{sample}.tsv.gz"
     output:
-        "heatmaps/{sample}-heatmap.png"
+        "heatmaps/{annotation}/{annotation}-{sample}-heatmap.png"
     params:
-        binsize = config["heatmaps"]["binsize"],
-        upstream = config["heatmaps"]["upstream"],
-        dnstream = config["heatmaps"]["dnstream"],
-        figunits = config["heatmaps"]["figunits"],
-        figwidth = config["heatmaps"]["figwidth"],
-        figheight = config["heatmaps"]["figheight"],
-        cmap = config["heatmaps"]["colormap"],
-        refpointlabel = config["heatmaps"]["refpointlabel"],
-        ylabel = config["heatmaps"]["ylabel"]
-    log: "logs/r_plotHeatmap-{sample}.log"
+        binsize = lambda wildcards : config["annotations"][wildcards.annotation]["binsize"],
+        upstream = lambda wildcards : config["annotations"][wildcards.annotation]["upstream"],
+        dnstream = lambda wildcards : config["annotations"][wildcards.annotation]["dnstream"],
+        figunits = lambda wildcards : config["annotations"][wildcards.annotation]["figunits"],
+        figwidth = lambda wildcards : config["annotations"][wildcards.annotation]["figwidth"],
+        figheight = lambda wildcards : config["annotations"][wildcards.annotation]["figheight"],
+        cmap = lambda wildcards : config["annotations"][wildcards.annotation]["colormap"],
+        refpointlabel = lambda wildcards : config["annotations"][wildcards.annotation]["refpointlabel"],
+        ylabel = lambda wildcards : config["annotations"][wildcards.annotation]["ylabel"]
     script:
         "scripts/plotHeatmap.R"
  
+rule melt_matrix:
+    input:
+        matrix = "heatmaps/{annotation}/{annotation}-{sample}.tsv.gz"
+    output:
+        "metagene/{annotation}/{annotation}-{sample}-melted.tsv.gz"
+    params:
+        name = lambda wildcards : wildcards.sample,
+        binsize = lambda wildcards : config["annotations"][wildcards.annotation]["binsize"],
+        upstream = lambda wildcards : config["annotations"][wildcards.annotation]["upstream"],
+        dnstream = lambda wildcards : config["annotations"][wildcards.annotation]["dnstream"],
+    script:
+        "scripts/melt_matrix.R"
+    
+rule cat_matrices:
+    input:
+        expand("metagene/{{annotation}}/{{annotation}}-{sample}-melted.tsv.gz", sample=SAMPLES)
+    output:
+        "metagene/{annotation}/{annotation}-allsamples.tsv.gz"
+    shell: """
+        cat {input} > {output}
+        """
+
+rule plot_indiv_metagene:
+    input:
+        "metagene/{annotation}/{annotation}-{sample}-melted.tsv.gz"
+    output:
+        "metagene/{annotation}/{annotation}-{sample}-metagene.png"
+    params:
+        refpointlabel = lambda wildcards : config["annotations"][wildcards.annotation]["refpointlabel"]
+    script:
+        "scripts/plotMetagene.R"
+
+rule plot_combined_metagene:
+    input:
+        "metagene/{annotation}/{annotation}-allsamples.tsv.gz"
+    output:
+        "metagene/{annotation}/{annotation}-allsamples.png"
+    params:
+        refpointlabel = lambda wildcards : config["annotations"][wildcards.annotation]["refpointlabel"]
+    script:
+        "scripts/plotMetagene.R"
+
