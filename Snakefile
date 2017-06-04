@@ -495,7 +495,7 @@ rule plot_indiv_metagene:
     params:
         refpointlabel = lambda wildcards : config["annotations"][wildcards.annotation]["refpointlabel"]
     script:
-        "scripts/plotMetagene.R"
+        "scripts/plotMetagene2.R"
 
 rule plot_combined_metagene:
     input:
