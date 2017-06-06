@@ -43,6 +43,7 @@ rule all:
         expand("alignment/unaligned-{sample}_2.fastq.gz", sample=SAMPLES),
         expand("metagene/{annotation}/{annotation}-{sample}-metagene.png", annotation = config["annotations"], sample=SAMPLES),
         #expand("metagene/{annotation}/{annotation}-allsamples.png", annotation = config["annotations"])
+        expand("coverage/bw/{sample}-midpoint-CPM-smoothed.bw", sample=SAMPLES)
 
 rule make_barcode_file:
     output:
@@ -414,6 +415,18 @@ rule make_bigwig_for_deeptools:
         (bedGraphToBigWig {input.bg} {input.chrsizes} {output}) &> {log}
         """
 
+rule smoothed_midpoint_coverage:
+    input:
+        "coverage/bw/{sample}-midpoint-CPM.bw"
+    output:
+        "coverage/bw/{sample}-midpoint-CPM-smoothed.bw"
+    params:
+        bandwidth = config["smooth_bandwidth"]
+    log: "logs/smoothed_midpoint_coverage/smooth_midpoint_coverage-{sample}.log"
+    shell: """
+        (python scripts/smooth_midpoint_coverage.py -b {params.bandwidth} -i {input} -o {output}) &> {log}
+        """
+
 rule deeptools_matrix:
     input:
         annotation = lambda wildcards: config["annotations"][wildcards.annotation]["path"],
@@ -493,7 +506,8 @@ rule plot_indiv_metagene:
     output:
         "metagene/{annotation}/{annotation}-{sample}-metagene.png"
     params:
-        refpointlabel = lambda wildcards : config["annotations"][wildcards.annotation]["refpointlabel"]
+        refpointlabel = lambda wildcards : config["annotations"][wildcards.annotation]["refpointlabel"],
+        binsize = lambda wildcards : config["annotations"][wildcards.annotation]["binsize"]
     script:
         "scripts/plotMetagene2.R"
 
@@ -507,3 +521,11 @@ rule plot_combined_metagene:
     script:
         "scripts/plotMetagene.R"
 
+#rule aaa:
+#    output:
+#       "{binsize}.txt"
+#    params:
+#        w = lambda wildcards : wildcards.binsize
+#    shell: """
+#        touch {output}
+#        """

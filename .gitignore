@@ -1,6 +1,5 @@
 barcodes.tsv
 fastq/*
-genome/*
 logs/
 .snakemake/
 alignment/
@@ -16,4 +15,4 @@ config.yaml
 
 
 !fastq/.gitkeep
-!genome/.gitkeep
+!logs/cluster/.gitkeep
