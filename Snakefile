@@ -2,7 +2,7 @@
 
 configfile: "config.yaml"
 
-SAMPLES = config["barcodes"]
+SAMPLES = config["samples"]
 
 localrules: all,
             make_barcode_file,
@@ -42,18 +42,18 @@ rule all:
         expand("heatmaps/{annotation}/{annotation}-{sample}-heatmap.png", annotation=config["annotations"], sample=SAMPLES),
         expand("alignment/unaligned-{sample}_2.fastq.gz", sample=SAMPLES),
         expand("metagene/{annotation}/{annotation}-{sample}-metagene.png", annotation = config["annotations"], sample=SAMPLES),
-        #expand("metagene/{annotation}/{annotation}-allsamples.png", annotation = config["annotations"])
+        expand("metagene/{annotation}/{annotation}-allsamples.tsv.gz", annotation = config["annotations"]),
         expand("coverage/bw/{sample}-midpoint-CPM-smoothed.bw", sample=SAMPLES)
 
 rule make_barcode_file:
     output:
         "barcodes.tsv"
     params:
-        bc = config["barcodes"]
+        bc = config["samples"]
     run:
         with open(output[0], "w") as out:
             for x in params.bc:
-                out.write(('\t'.join((x, params.bc[x]))+'\n'))
+                out.write(('\t'.join((x, params.bc[x]["barcode"]))+'\n'))
 
 #fastQC on raw sequencing data
 rule fastqc_raw:
@@ -100,7 +100,7 @@ rule cutadapt:
         r2 = temp("fastq/trimmed/{sample}-trim.r2.fastq")
     params:
         qual_cutoff = config["cutadapt"]["qual_cutoff"],
-        adapter = lambda wildcards : SAMPLES[wildcards.sample]+"T"
+        adapter = lambda wildcards : SAMPLES[wildcards.sample]["barcode"]+"T"
     log:
         "logs/cutadapt/cutadapt-{sample}.log"
     shell: """
@@ -387,7 +387,7 @@ rule cat_windows:
     output:
         "correlations/midpoint-CPM-windows.tsv"
     params:
-        labels = list(config["barcodes"].keys()),
+        labels = list(config["samples"].keys()),
     shell: """
         echo -e "chr\tstart\tend\t{params.labels}\n$(paste {input.coord} {input.values})" > {output}
         """
