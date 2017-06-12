@@ -7,8 +7,7 @@ coverage/
 nucwave/
 qual_ctrl/
 correlations/
-heatmaps/
-metagene/
+datavis/
 scripts/.snakemake*
 snakemake.err
 snakemake.log

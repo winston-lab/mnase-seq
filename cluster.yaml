@@ -91,11 +91,14 @@ cat_matrices:
     time : "2:00"
     mem : 2000
 
-plot_indiv_metagene:
+r_datavis:
     time : "11:50"
-    mem : 20000
+    mem : 60000
+#plot_indiv_metagene:
+#    time : "11:50"
+#    mem : 20000
 
-plot_combined_metagene:
-    queue : "medium"
-    time : "96:00"
-    mem : 20000 
+#plot_combined_metagene:
+#    queue : "medium"
+#    time : "96:00"
+#    mem : 20000 
