@@ -2,6 +2,7 @@ __default__ :
     queue : "short"
     time : "11:50"
     n : 1
+    mem : 2000
     name : "{rule}.{wildcards}"
     log : "logs/cluster/{rule}.{wildcards}.log"
     err : "logs/cluster/{rule}.{wildcards}.err"
@@ -94,11 +95,8 @@ cat_matrices:
 r_datavis:
     time : "11:50"
     mem : 60000
-#plot_indiv_metagene:
-#    time : "11:50"
-#    mem : 20000
 
-#plot_combined_metagene:
-#    queue : "medium"
-#    time : "96:00"
-#    mem : 20000 
+meta_oneoff:
+    queue : "priority"
+    time : "11:50"
+    mem : 60000

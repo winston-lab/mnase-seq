@@ -2,7 +2,13 @@
 
 configfile: "config.yaml"
 
-SAMPLES = config["samples"]
+CONTROL = config["samples"]["control"]
+CONDITION = config["samples"]["condition"]
+
+#SAMPLES = config["samples"]
+SAMPLES = CONTROL.copy()
+SAMPLES.update(CONDITION)
+#SAMPLES = {**CONTROL, **CONDITION}
 
 localrules: all,
             make_barcode_file,
@@ -18,7 +24,9 @@ localrules: all,
             seq_depth_norm,
             make_bigwig_for_deeptools,
             melt_matrix,
-            gzip_deeptools_table
+            gzip_deeptools_table,
+            cat_matrices
+
 #requirements
 # seq/ea-utils/
 # UNLOAD seq/cutadapt/1.11
@@ -29,29 +37,27 @@ localrules: all,
 # pip install deeptools
 # UNLOAD deeptools, pysam
 # UNLOAD stats/R/3.2.1, load stats/R/3.3.1
+
 rule all:
     input:
         "qual_ctrl/raw",
-        #"qual_ctrl/coverage.tsv",
-        #"qual_ctrl/coverage.png",
         "qual_ctrl/frag-size-dist.png",
         "qual_ctrl/seq-depth-dist.png",
         expand("nucwave/{sample}/{sample}_depth_wl_trimmed_PE.wig", sample=SAMPLES),
         expand("coverage/{sample}-mnase-midpoint-CPM.bedgraph", sample=SAMPLES),
         "correlations/pca-scree.png",
-        #expand("heatmaps/{annotation}/{annotation}-{sample}-heatmap.png", annotation=config["annotations"], sample=SAMPLES),
         expand("alignment/unaligned-{sample}_2.fastq.gz", sample=SAMPLES),
-        #expand("metagene/{annotation}/{annotation}-{sample}-metagene.png", annotation = config["annotations"], sample=SAMPLES),
-        #expand("metagene/{annotation}/{annotation}-allsamples.tsv.gz", annotation = config["annotations"]),
         expand("coverage/bw/{sample}-mnase-midpoint-CPM-smoothed.bw", sample=SAMPLES),
-        expand("datavis/{annotation}/mnase-{annotation}-metaheatmap-bygroup.png", annotation = config["annotations"]) 
-        #expand("datavis/{annotation}/allsamples-{annotation}.tsv.gz", annotation = "allcodingTSS")
+        expand("datavis/{annotation}/mnase-{annotation}-metaheatmap-bygroup.png", annotation = config["annotations"]), 
+        #expand("datavis/mnase-{annotation}-metagene-groupoverlay-oneoff.pdf", annotation=["allcodingTSS"])
+        #expand("danpos/{condition}-v-{control}/{condition}-{control}.positions.integrative.xls", condition = CONDITION, control = CONTROL)
+
 
 rule make_barcode_file:
     output:
         "barcodes.tsv"
     params:
-        bc = config["samples"]
+        bc = SAMPLES
     run:
         with open(output[0], "w") as out:
             for x in params.bc:
@@ -306,8 +312,6 @@ rule cat_perbase_depth:
         expand("qual_ctrl/.{sample}-depth.tsv", sample=SAMPLES)
     output:
         "qual_ctrl/perbasedepth.tsv.gz"
-    #params:
-    #    labels = list(SAMPLES.keys())
     shell: """
         cat {input} | gzip -f > {output}  
         """
@@ -319,7 +323,6 @@ rule plot_depth:
         "qual_ctrl/seq-depth-dist.png"
     script:
         "scripts/plotCoverage.R"
-
 
 rule midpoint_coverage:
     input:
@@ -388,7 +391,7 @@ rule cat_windows:
     output:
         "correlations/midpoint-CPM-windows.tsv"
     params:
-        labels = list(config["samples"].keys()),
+        labels = list(SAMPLES.keys()),
     shell: """
         echo -e "chr\tstart\tend\t{params.labels}\n$(paste {input.coord} {input.values})" > {output}
         """
@@ -445,13 +448,12 @@ rule deeptools_matrix:
         binstat = lambda wildcards: config["annotations"][wildcards.annotation]["binstat"]
     threads : config["threads"]
     log: "logs/deeptools/computeMatrix-{annotation}-{sample}.log"
-    shell: """
-        (computeMatrix reference-point -R {input.annotation} -S {input.bw} --referencePoint {params.refpoint} -out {output.dtfile} --outFileNameMatrix {output.matrix} -b {params.upstream} -a {params.dnstream} --nanAfterEnd --binSize {params.binsize} --sortRegions {params.sort} --sortUsing {params.sortusing} --averageTypeBins {params.binstat} -p {threads}) &> {log}
-        """
     #shell: """
-    #    (computeMatrix reference-point -R {input.annotation} -S {input.bw} --referencePoint {params.refpoint} -out {output.dtfile} --outFileNameMatrix {output.matrix} -b {params.upstream} -a {params.dnstream} --sortRegions {params.sort} --averageTypeBins {params.binstat} -p {threads}) &> {log}
+    #    (computeMatrix reference-point -R {input.annotation} -S {input.bw} --referencePoint {params.refpoint} -out {output.dtfile} --outFileNameMatrix {output.matrix} -b {params.upstream} -a {params.dnstream} --nanAfterEnd --binSize {params.binsize} --sortRegions {params.sort} --sortUsing {params.sortusing} --averageTypeBins {params.binstat} -p {threads}) &> {log}
     #    """
-
+    shell: """
+        (computeMatrix reference-point -R {input.annotation} -S {input.bw} --referencePoint {params.refpoint} -out {output.dtfile} --outFileNameMatrix {output.matrix} -b {params.upstream} -a {params.dnstream} --binSize {params.binsize} --sortRegions {params.sort} --sortUsing {params.sortusing} --averageTypeBins {params.binstat} -p {threads}) &> {log}
+        """
 rule gzip_deeptools_table:
     input:
         tsv = "datavis/{annotation}/{annotation}-{sample}.tsv",
@@ -463,24 +465,6 @@ rule gzip_deeptools_table:
         rm {input.mat}
         """
 
-#rule r_plotHeatmap:
-#    input:
-#        matrix = "heatmaps/{annotation}/{annotation}-{sample}.tsv.gz"
-#    output:
-#        "heatmaps/{annotation}/{annotation}-{sample}-heatmap.png"
-#    params:
-#        binsize = lambda wildcards : config["annotations"][wildcards.annotation]["binsize"],
-#        upstream = lambda wildcards : config["annotations"][wildcards.annotation]["upstream"],
-#        dnstream = lambda wildcards : config["annotations"][wildcards.annotation]["dnstream"],
-#        figunits = lambda wildcards : config["annotations"][wildcards.annotation]["figunits"],
-#        figwidth = lambda wildcards : config["annotations"][wildcards.annotation]["figwidth"],
-#        figheight = lambda wildcards : config["annotations"][wildcards.annotation]["figheight"],
-#        cmap = lambda wildcards : config["annotations"][wildcards.annotation]["colormap"],
-#        refpointlabel = lambda wildcards : config["annotations"][wildcards.annotation]["refpointlabel"],
-#        ylabel = lambda wildcards : config["annotations"][wildcards.annotation]["ylabel"]
-#    script:
-#        "scripts/plotHeatmap.R"
- 
 rule melt_matrix:
     input:
         matrix = "datavis/{annotation}/{annotation}-{sample}.tsv.gz"
@@ -488,7 +472,7 @@ rule melt_matrix:
         temp("datavis/{annotation}/{annotation}-{sample}-melted.tsv.gz")
     params:
         name = lambda wildcards : wildcards.sample,
-        group = lambda wildcards : config["samples"][wildcards.sample]["group"],
+        group = lambda wildcards : SAMPLES[wildcards.sample]["group"],
         binsize = lambda wildcards : config["annotations"][wildcards.annotation]["binsize"],
         upstream = lambda wildcards : config["annotations"][wildcards.annotation]["upstream"],
         dnstream = lambda wildcards : config["annotations"][wildcards.annotation]["dnstream"]
@@ -528,29 +512,58 @@ rule r_datavis:
     script:
         "scripts/plotHeatmapsMeta.R"
 
+rule meta_oneoff:
+    input:
+        matrix = "datavis/allcodingTSS/allsamples-allcodingTSS.tsv.gz"
+    output:
+        metagene_overlay = "datavis/mnase-{annotation}-metagene-groupoverlay-oneoff.pdf"
+    params:
+        binsize = lambda wildcards : config["annotations"][wildcards.annotation]["binsize"],
+        upstream = lambda wildcards : config["annotations"][wildcards.annotation]["upstream"],
+        dnstream = lambda wildcards : config["annotations"][wildcards.annotation]["dnstream"],
+        pct_cutoff = lambda wildcards : config["annotations"][wildcards.annotation]["pct_cutoff"],
+        heatmap_cmap = lambda wildcards : config["annotations"][wildcards.annotation]["heatmap_colormap"],
+        metagene_palette = lambda wildcards : config["annotations"][wildcards.annotation]["metagene_palette"],
+        avg_heatmap_cmap = lambda wildcards : config["annotations"][wildcards.annotation]["avg_heatmap_cmap"],
+        refpointlabel = lambda wildcards : config["annotations"][wildcards.annotation]["refpointlabel"],
+        ylabel = lambda wildcards : config["annotations"][wildcards.annotation]["ylabel"]
+    script:
+        "scripts/plotMetaOneOff.R"
 
+rule group_bam_for_danpos:
+    input:
+        expand("alignment/{sample}.bam", sample=SAMPLES)
+    output:
+        "danpos/{group}/{sample}.bam"
+    shell: """
+        cp {input} {output}
+    """
 
-
-#rule plot_indiv_metagene:
-#    input:
-#        "metagene/{annotation}/{annotation}-{sample}-melted.tsv.gz"
+rule danpos:
+    input:
+        condition = "danpos/{conditiongroup}/",
+        control = "danpos/{controlgroup}/"
 #    output:
-#        "metagene/{annotation}/{annotation}-{sample}-metagene.png"
-#    params:
-#        refpointlabel = lambda wildcards : config["annotations"][wildcards.annotation]["refpointlabel"],
-#        binsize = lambda wildcards : config["annotations"][wildcards.annotation]["binsize"]
-#    script:
-#        "scripts/plotMetagene2.R"
+#        "danpos/{condition}-v-{control}/{condition}-{control}.positions.integrative.xls",
+#        "danpos/{condition}-v-{control}/reference_positions.xls",
+#        "danpos/{condition}-v-{control}/diff/{condition}-{control}.pois_diff.wig",
+#        "danpos/{condition}-v-{control}/pooled/{condition}.Fnor.smooth.positions.ref_adjust.xls",
+#        "danpos/{condition}-v-{control}/pooled/{condition}.Fnor.smooth.positions.xls",
+#        "danpos/{condition}-v-{control}/pooled/{condition}.Fnor.smooth.wig",
+#        "danpos/{condition}-v-{control}/pooled/{control}.Fnor.smooth.positions.ref_adjust.xls",
+#        "danpos/{condition}-v-{control}/pooled/{control}.Fnor.smooth.positions.xls",
+#        "danpos/{condition}-v-{control}/pooled/{control}.Fnor.smooth.wig"
+#    conda:
+#        "envs/danpos.yaml"        
+#    log: "logs/danpos/danpos-{condition}-v-{control}.log"
+#    shell: """
+#        module load seq/samtools/0.1.19
+#        (python /groups/winston/jc459/spt5/mnase-seq/scripts/danpos-2.2.2/danpos.py dpos {input.condition}:{input.control} -m 1) &> {log}
+#        module unload seq/samtools/0.1.19
+#        """ 
+##for now I use default parameters except for paired end
+    
 
-#rule plot_combined_metagene:
-#    input:
-#        "metagene/{annotation}/{annotation}-allsamples.tsv.gz"
-#    output:
-#        "metagene/{annotation}/{annotation}-allsamples.png"
-#    params:
-#        refpointlabel = lambda wildcards : config["annotations"][wildcards.annotation]["refpointlabel"]
-#    script:
-#        "scripts/plotMetagene.R"
 
 #rule aaa:
 #    output:
