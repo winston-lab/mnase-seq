@@ -9,7 +9,7 @@ __default__ :
 
 fastqc_raw:
     time : "3:00"
-    n : 4
+    n : 1
     mem : 2000
 
 demultiplex:
@@ -31,7 +31,7 @@ bowtie:
 
 gzip_loose_fastq:
     time : "3:00"
-    n : 4
+    n : 1
 
 deeptools_plotcoverage:
     time : "11:50"
@@ -81,7 +81,7 @@ smoothed_midpoint_coverage:
 
 deeptools_matrix:
     time : "2:00"
-    n : 4
+    n : 1
     mem : 2000
 
 r_plotHeatmap:
@@ -100,3 +100,8 @@ meta_oneoff:
     queue : "priority"
     time : "11:50"
     mem : 60000
+
+dpos_deeptools_matrix:
+    time : "2:00"
+    n : 1
+    mem : 2000

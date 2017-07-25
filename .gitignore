@@ -11,6 +11,8 @@ datavis/
 scripts/.snakemake*
 snakemake.err
 snakemake.log
+*.svg
+danpos/
 
 config.yaml
 

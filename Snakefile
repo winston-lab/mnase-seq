@@ -5,6 +5,9 @@ configfile: "config.yaml"
 CONTROL = config["samples"]["control"]
 CONDITION = config["samples"]["condition"]
 
+controlgroups = list(set([CONTROL[x]['group'] for x in CONTROL]))
+conditiongroups = list(set([CONDITION[x]['group'] for x in CONDITION]))
+
 #SAMPLES = config["samples"]
 SAMPLES = CONTROL.copy()
 SAMPLES.update(CONDITION)
@@ -25,18 +28,12 @@ localrules: all,
             make_bigwig_for_deeptools,
             melt_matrix,
             gzip_deeptools_table,
-            cat_matrices
-
-#requirements
-# seq/ea-utils/
-# UNLOAD seq/cutadapt/1.11
-# use pip-installed cutadapt
-# seq/bowtie/1.1.1
-# seq/samtools/1.3
-# pip install numpy PyWavelets
-# pip install deeptools
-# UNLOAD deeptools, pysam
-# UNLOAD stats/R/3.2.1, load stats/R/3.3.1
+            cat_matrices,
+            group_bam_for_danpos,
+            dpos_wig_to_bigwig,
+            dpos_gzip_deeptools_table,
+            dpos_melt_matrix,
+            dpos_cat_matrices
 
 rule all:
     input:
@@ -49,9 +46,11 @@ rule all:
         expand("alignment/unaligned-{sample}_2.fastq.gz", sample=SAMPLES),
         expand("coverage/bw/{sample}-mnase-midpoint-CPM-smoothed.bw", sample=SAMPLES),
         expand("datavis/{annotation}/mnase-{annotation}-metaheatmap-bygroup.png", annotation = config["annotations"]), 
+        #expand("danpos/{condition}-v-{control}/pooled/danpos_{control}.Fnor.smooth.wig", control = controlgroups, condition = conditiongroups),
+        #expand("datavis/{annotation}/dpos-{annotation}-{condition}-v-{control}.tsv", annotation = config["annotations"], control = controlgroups, condition = conditiongroups)
+        #expand("datavis/{annotation}/dpos/dpos-{annotation}-{condition}-v-{control}-melted.tsv.gz", annotation = config["annotations"], control=controlgroups, condition=conditiongroups),
         #expand("datavis/mnase-{annotation}-metagene-groupoverlay-oneoff.pdf", annotation=["allcodingTSS"])
-        #expand("danpos/{condition}-v-{control}/{condition}-{control}.positions.integrative.xls", condition = CONDITION, control = CONTROL)
-
+        #expand("datavis/{annotation}/dpos/dpos-allconditions-{annotation}.tsv.gz", annotation = config["annotations"])
 
 rule make_barcode_file:
     output:
@@ -532,7 +531,7 @@ rule meta_oneoff:
 
 rule group_bam_for_danpos:
     input:
-        expand("alignment/{sample}.bam", sample=SAMPLES)
+        "alignment/{sample}.bam"
     output:
         "danpos/{group}/{sample}.bam"
     shell: """
@@ -541,35 +540,93 @@ rule group_bam_for_danpos:
 
 rule danpos:
     input:
-        condition = "danpos/{conditiongroup}/",
-        control = "danpos/{controlgroup}/"
-#    output:
-#        "danpos/{condition}-v-{control}/{condition}-{control}.positions.integrative.xls",
-#        "danpos/{condition}-v-{control}/reference_positions.xls",
-#        "danpos/{condition}-v-{control}/diff/{condition}-{control}.pois_diff.wig",
-#        "danpos/{condition}-v-{control}/pooled/{condition}.Fnor.smooth.positions.ref_adjust.xls",
-#        "danpos/{condition}-v-{control}/pooled/{condition}.Fnor.smooth.positions.xls",
-#        "danpos/{condition}-v-{control}/pooled/{condition}.Fnor.smooth.wig",
-#        "danpos/{condition}-v-{control}/pooled/{control}.Fnor.smooth.positions.ref_adjust.xls",
-#        "danpos/{condition}-v-{control}/pooled/{control}.Fnor.smooth.positions.xls",
-#        "danpos/{condition}-v-{control}/pooled/{control}.Fnor.smooth.wig"
-#    conda:
-#        "envs/danpos.yaml"        
-#    log: "logs/danpos/danpos-{condition}-v-{control}.log"
-#    shell: """
-#        module load seq/samtools/0.1.19
-#        (python /groups/winston/jc459/spt5/mnase-seq/scripts/danpos-2.2.2/danpos.py dpos {input.condition}:{input.control} -m 1) &> {log}
-#        module unload seq/samtools/0.1.19
-#        """ 
+        ["danpos/" + SAMPLES[x]['group'] + "/" + x + ".bam" for x in SAMPLES]
+    output:
+        "danpos/{condition}-v-{control}/danpos_{condition}-danpos_{control}.positions.integrative.xls",
+        "danpos/{condition}-v-{control}/reference_positions.xls",
+        "danpos/{condition}-v-{control}/diff/danpos_{condition}-danpos_{control}.pois_diff.wig",
+        "danpos/{condition}-v-{control}/pooled/danpos_{condition}.Fnor.smooth.positions.ref_adjust.xls",
+        "danpos/{condition}-v-{control}/pooled/danpos_{condition}.Fnor.smooth.positions.xls",
+        "danpos/{condition}-v-{control}/pooled/danpos_{condition}.Fnor.smooth.wig",
+        "danpos/{condition}-v-{control}/pooled/danpos_{control}.Fnor.smooth.positions.ref_adjust.xls",
+        "danpos/{condition}-v-{control}/pooled/danpos_{control}.Fnor.smooth.positions.xls",
+        "danpos/{condition}-v-{control}/pooled/danpos_{control}.Fnor.smooth.wig"
+    conda:
+        "envs/danpos.yaml"        
+    log: "logs/danpos/danpos-{condition}-v-{control}.log"
+    shell: """
+        module load seq/samtools/0.1.19
+        (python /groups/winston/jc459/spt5/mnase-seq/scripts/danpos-2.2.2/danpos.py dpos danpos/{wildcards.condition}/:danpos/{wildcards.control}/ -m 1 -o danpos/{wildcards.condition}-v-{wildcards.control}) &> {log}
+        module unload seq/samtools/0.1.19
+        """ 
+
 ##for now I use default parameters except for paired end
-    
 
+rule dpos_wig_to_bigwig:
+    input:
+        wig = "danpos/{condition}-v-{control}/diff/danpos_{condition}-danpos_{control}.pois_diff.wig",
+        chrsizes = config["genome"]["chrsizes"]
+    output:
+        "danpos/{condition}-v-{control}/diff/danpos_{condition}-danpos_{control}.pois_diff.bw",
+    log: "logs/dpos_wig_to_bigwig/dpos_wig_to_bigwig-{condition}-v-{control}.log"
+    shell: """
+        (wigToBigWig {input.wig} {input.chrsizes} {output} ) &> {log}
+        """
 
-#rule aaa:
-#    output:
-#       "{binsize}.txt"
-#    params:
-#        w = lambda wildcards : wildcards.binsize
-#    shell: """
-#        touch {output}
-#        """
+rule dpos_deeptools_matrix:
+    input:
+        annotation = lambda wildcards: config["annotations"][wildcards.annotation]["path"],
+        bw = "danpos/{condition}-v-{control}/diff/danpos_{condition}-danpos_{control}.pois_diff.bw",
+    output:
+        dtfile = temp("datavis/{annotation}/dpos/dpos-{annotation}-{condition}-v-{control}.mat.gz"),
+        matrix = temp("datavis/{annotation}/dpos/dpos-{annotation}-{condition}-v-{control}.tsv")
+    params:
+        refpoint = lambda wildcards: config["annotations"][wildcards.annotation]["refpoint"],
+        upstream = lambda wildcards: config["annotations"][wildcards.annotation]["upstream"],
+        dnstream = lambda wildcards: config["annotations"][wildcards.annotation]["dnstream"],
+        binsize = lambda wildcards: config["annotations"][wildcards.annotation]["binsize"],
+        sort = lambda wildcards: config["annotations"][wildcards.annotation]["sort"],
+        sortusing = lambda wildcards: config["annotations"][wildcards.annotation]["sortby"],
+        binstat = lambda wildcards: config["annotations"][wildcards.annotation]["binstat"]
+    threads : config["threads"]
+    log: "logs/deeptools/dpos_computeMatrix-{annotation}-{condition}-v-{control}.log"
+    shell: """
+        (computeMatrix reference-point -R {input.annotation} -S {input.bw} --referencePoint {params.refpoint} -out {output.dtfile} --outFileNameMatrix {output.matrix} -b {params.upstream} -a {params.dnstream} --nanAfterEnd --binSize {params.binsize} --sortRegions {params.sort} --sortUsing {params.sortusing} --averageTypeBins {params.binstat} -p {threads}) &> {log}
+        """
+    #shell: """
+    #    (computeMatrix reference-point -R {input.annotation} -S {input.bw} --referencePoint {params.refpoint} -out {output.dtfile} --outFileNameMatrix {output.matrix} -b {params.upstream} -a {params.dnstream} --binSize {params.binsize} --sortRegions {params.sort} --sortUsing {params.sortusing} --averageTypeBins {params.binstat} -p {threads}) &> {log}
+    #    """
+
+rule dpos_gzip_deeptools_table:
+    input:
+        tsv = "datavis/{annotation}/dpos/dpos-{annotation}-{condition}-v-{control}.tsv",
+        mat = "datavis/{annotation}/dpos/dpos-{annotation}-{condition}-v-{control}.mat.gz"
+    output:
+        "datavis/{annotation}/dpos/dpos-{annotation}-{condition}-v-{control}-t.tsv.gz"
+    shell: """
+        pigz -fc {input.tsv} > {output}
+        rm {input.mat}
+        """
+
+rule dpos_melt_matrix:
+    input:
+        matrix = "datavis/{annotation}/dpos/dpos-{annotation}-{condition}-v-{control}-t.tsv.gz"
+    output:
+        temp("datavis/{annotation}/dpos/dpos-{annotation}-{condition}-v-{control}-melted.tsv.gz")
+    params:
+        controlgroup = lambda wildcards : wildcards.control,
+        conditiongroup = lambda wildcards : wildcards.condition,
+        binsize = lambda wildcards : config["annotations"][wildcards.annotation]["binsize"],
+        upstream = lambda wildcards : config["annotations"][wildcards.annotation]["upstream"],
+        dnstream = lambda wildcards : config["annotations"][wildcards.annotation]["dnstream"]
+    script:
+        "scripts/melt_lfc_matrix.R"
+
+rule dpos_cat_matrices:
+    input:
+        expand("datavis/{{annotation}}/dpos/dpos-{{annotation}}-{condition}-v-{control}-melted.tsv.gz", condition = conditiongroups, control = controlgroups)
+    output:
+        "datavis/{annotation}/dpos/dpos-allconditions-{annotation}.tsv.gz"
+    shell: """
+        cat {input} > {output}
+        """
