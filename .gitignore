@@ -16,6 +16,6 @@ danpos/
 
 config.yaml
 
-
+*Rplots.pdf
 !fastq/.gitkeep
 !logs/cluster/.gitkeep

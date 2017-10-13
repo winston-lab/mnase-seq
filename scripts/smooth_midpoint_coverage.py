@@ -19,7 +19,7 @@ outbw.addHeader(list(inbw.chroms().items()))
 for chrom in inbw.chroms():
     raw = inbw.values(chrom, 0, inbw.chroms(chrom), numpy=True)
     smoothed = gsmooth(raw, sigma=args.bandwidth, order=0, mode='mirror')
-    outbw.addEntries(chrom, 1, values=smoothed, span=1, step=1)
+    outbw.addEntries(chrom, 0, values=smoothed, span=1, step=1)
 
 inbw.close()
 outbw.close()

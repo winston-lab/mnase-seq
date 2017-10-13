@@ -2,16 +2,10 @@
 
 configfile: "config.yaml"
 
-CONTROL = config["samples"]["control"]
-CONDITION = config["samples"]["condition"]
+SAMPLES = config["samples"]
 
-controlgroups = list(set([CONTROL[x]['group'] for x in CONTROL]))
-conditiongroups = list(set([CONDITION[x]['group'] for x in CONDITION]))
-
-#SAMPLES = config["samples"]
-SAMPLES = CONTROL.copy()
-SAMPLES.update(CONDITION)
-#SAMPLES = {**CONTROL, **CONDITION}
+controlgroups = config["controls"]
+conditiongroups = config["conditions"]
 
 localrules: all,
             make_barcode_file,
@@ -38,14 +32,14 @@ localrules: all,
 rule all:
     input:
         "qual_ctrl/raw",
-        "qual_ctrl/frag-size-dist.png",
-        "qual_ctrl/seq-depth-dist.png",
+        "qual_ctrl/frag-size-dist.svg",
+        "qual_ctrl/seq-depth-dist.svg",
         expand("nucwave/{sample}/{sample}_depth_wl_trimmed_PE.wig", sample=SAMPLES),
         expand("coverage/{sample}-mnase-midpoint-CPM.bedgraph", sample=SAMPLES),
-        "correlations/pca-scree.png",
+        "correlations/pca-scree.svg",
         expand("alignment/unaligned-{sample}_2.fastq.gz", sample=SAMPLES),
         expand("coverage/bw/{sample}-mnase-midpoint-CPM-smoothed.bw", sample=SAMPLES),
-        expand("datavis/{annotation}/mnase-{annotation}-metaheatmap-bygroup.png", annotation = config["annotations"]), 
+        expand("datavis/{annotation}/mnase-{annotation}-metaheatmap-bygroup.svg", annotation = config["annotations"]),
         #expand("danpos/{condition}-v-{control}/pooled/danpos_{control}.Fnor.smooth.wig", control = controlgroups, condition = conditiongroups),
         #expand("datavis/{annotation}/dpos-{annotation}-{condition}-v-{control}.tsv", annotation = config["annotations"], control = controlgroups, condition = conditiongroups)
         #expand("datavis/{annotation}/dpos/dpos-{annotation}-{condition}-v-{control}-melted.tsv.gz", annotation = config["annotations"], control=controlgroups, condition=conditiongroups),
@@ -141,7 +135,7 @@ rule bowtie_build:
     params:
         outbase = "../genome/bowtie1_indexes/" + basename
     log:
-        "logs/bowtie/bowtie-build.log"    
+        "logs/bowtie/bowtie-build.log"
     shell: """
         (bowtie-build {input.fasta} {params.outbase}) &> {log}
         """
@@ -209,7 +203,7 @@ rule deeptools_plotcoverage:
         index = expand("alignment/{sample}.bam.bai", sample=SAMPLES)
     output:
         table= "qual_ctrl/coverage.tsv",
-        fig="qual_ctrl/coverage.png"
+        fig="qual_ctrl/coverage.svg"
     params:
         min_ins = config["bowtie"]["min_ins"],
         max_ins = config["bowtie"]["max_ins"]
@@ -217,11 +211,11 @@ rule deeptools_plotcoverage:
     threads: config["threads"]
     shell: """
         (plotCoverage --outRawCounts {output.table} -p {threads} -v --extendReads --minFragmentLength {params.min_ins} --maxFragmentLength {params.max_ins} -b {input.bam} -o {output.fig}) &> {log}
-        """   
+        """
 
 rule build_nucwave_input:
     input:
-       "alignment/{sample}.bam" 
+       "alignment/{sample}.bam"
     output:
        "alignment/{sample}.bowtie"
     log : "logs/build_nucwave_input/nucwave_input-{sample}.log"
@@ -281,7 +275,7 @@ rule plot_fragsizes:
     input:
         table = "alignment/fragments/fragsizes.tsv"
     output:
-        plot = "qual_ctrl/frag-size-dist.png"
+        plot = "qual_ctrl/frag-size-dist.svg"
     script:
         "scripts/plotfragsizedist.R"
 
@@ -312,14 +306,14 @@ rule cat_perbase_depth:
     output:
         "qual_ctrl/perbasedepth.tsv.gz"
     shell: """
-        cat {input} | gzip -f > {output}  
+        cat {input} | gzip -f > {output}
         """
 
 rule plot_depth:
     input:
         "qual_ctrl/perbasedepth.tsv.gz"
     output:
-        "qual_ctrl/seq-depth-dist.png"
+        "qual_ctrl/seq-depth-dist.svg"
     script:
         "scripts/plotCoverage.R"
 
@@ -399,14 +393,14 @@ rule plot_correlations:
     input:
         "correlations/midpoint-CPM-windows.tsv"
     output:
-        scatter = "correlations/pairwise-scatterplots.png",
-        dists_cluster = "correlations/sample-dists-clustered.png",
-        dists_nocluster = "correlations/sample-dists-unclustered.png",
-        pca = "correlations/pca.png",
-        scree = "correlations/pca-scree.png"
+        scatter = "correlations/pairwise-scatterplots.svg",
+        dists_cluster = "correlations/sample-dists-clustered.svg",
+        dists_nocluster = "correlations/sample-dists-unclustered.svg",
+        pca = "correlations/pca.svg",
+        scree = "correlations/pca-scree.svg"
     script:
         "scripts/plotcorrelations.R"
-                
+
 rule make_bigwig_for_deeptools:
     input:
         bg = "coverage/{sample}-mnase-midpoint-CPM.bedgraph",
@@ -433,7 +427,8 @@ rule smoothed_midpoint_coverage:
 rule deeptools_matrix:
     input:
         annotation = lambda wildcards: config["annotations"][wildcards.annotation]["path"],
-        bw = "coverage/bw/{sample}-mnase-midpoint-CPM.bw"
+        #bw = "coverage/bw/{sample}-mnase-midpoint-CPM.bw"
+        bw = "coverage/bw/{sample}-mnase-midpoint-CPM-smoothed.bw"
     output:
         dtfile = temp("datavis/{annotation}/{annotation}-{sample}.mat.gz"),
         matrix = temp("datavis/{annotation}/{annotation}-{sample}.tsv")
@@ -477,7 +472,7 @@ rule melt_matrix:
         dnstream = lambda wildcards : config["annotations"][wildcards.annotation]["dnstream"]
     script:
         "scripts/melt_matrix2.R"
-    
+
 rule cat_matrices:
     input:
         expand("datavis/{{annotation}}/{{annotation}}-{sample}-melted.tsv.gz", sample=SAMPLES)
@@ -491,13 +486,13 @@ rule r_datavis:
     input:
         matrix = "datavis/{annotation}/allsamples-{annotation}.tsv.gz"
     output:
-        heatmap_sample = "datavis/{annotation}/mnase-{annotation}-heatmap-bysample.png",
-        heatmap_group = "datavis/{annotation}/mnase-{annotation}-heatmap-bygroup.png",
-        metagene_sample = "datavis/{annotation}/mnase-{annotation}-metagene-bysample.png",
-        metagene_group = "datavis/{annotation}/mnase-{annotation}-metagene-bygroup.png",
-        metagene_overlay = "datavis/{annotation}/mnase-{annotation}-metagene-groupoverlay.png",
-        metaheatmap_sample = "datavis/{annotation}/mnase-{annotation}-metaheatmap-bysample.png",
-        metaheatmap_group = "datavis/{annotation}/mnase-{annotation}-metaheatmap-bygroup.png" 
+        heatmap_sample = "datavis/{annotation}/mnase-{annotation}-heatmap-bysample.svg",
+        heatmap_group = "datavis/{annotation}/mnase-{annotation}-heatmap-bygroup.svg",
+        metagene_sample = "datavis/{annotation}/mnase-{annotation}-metagene-bysample.svg",
+        metagene_group = "datavis/{annotation}/mnase-{annotation}-metagene-bygroup.svg",
+        metagene_overlay = "datavis/{annotation}/mnase-{annotation}-metagene-groupoverlay.svg",
+        metaheatmap_sample = "datavis/{annotation}/mnase-{annotation}-metaheatmap-bysample.svg",
+        metaheatmap_group = "datavis/{annotation}/mnase-{annotation}-metaheatmap-bygroup.svg"
     params:
         binsize = lambda wildcards : config["annotations"][wildcards.annotation]["binsize"],
         upstream = lambda wildcards : config["annotations"][wildcards.annotation]["upstream"],
@@ -552,13 +547,13 @@ rule danpos:
         "danpos/{condition}-v-{control}/pooled/danpos_{control}.Fnor.smooth.positions.xls",
         "danpos/{condition}-v-{control}/pooled/danpos_{control}.Fnor.smooth.wig"
     conda:
-        "envs/danpos.yaml"        
+        "envs/danpos.yaml"
     log: "logs/danpos/danpos-{condition}-v-{control}.log"
     shell: """
         module load seq/samtools/0.1.19
         (python /groups/winston/jc459/spt5/mnase-seq/scripts/danpos-2.2.2/danpos.py dpos danpos/{wildcards.condition}/:danpos/{wildcards.control}/ -m 1 -o danpos/{wildcards.condition}-v-{wildcards.control}) &> {log}
         module unload seq/samtools/0.1.19
-        """ 
+        """
 
 ##for now I use default parameters except for paired end
 

@@ -29,7 +29,7 @@ downstream = snakemake@params[["dnstream"]]
 cutoff = quantile(raw$cpm, probs=snakemake@params[["pct_cutoff"]], na.rm=TRUE)
 
 #plot heatmap facetted by sample and group
-heatmap_base = ggplot(data = raw %>% filter(cpm <= cutoff)) +
+heatmap_base = ggplot(data = raw %>% mutate_at(vars(cpm), funs(pmin(cutoff, .)))) + 
   geom_tile(aes(x=position, y=index, fill=cpm)) +
   scale_y_reverse(name=paste(nindices, snakemake@params[["ylabel"]])) +
   scale_x_continuous(breaks = c(-upstream/1000, 0, downstream/1000), labels=c(-upstream/1000, snakemake@params[["refpointlabel"]], downstream/1000)) +
@@ -46,15 +46,16 @@ heatmap_base = ggplot(data = raw %>% filter(cpm <= cutoff)) +
 
 
 heatmap_samples = heatmap_base + facet_wrap(~sample, ncol=(nsamples/ngroups))
-ggsave(snakemake@output[["heatmap_sample"]], plot = heatmap_samples, height=3+round((nindices/600)*(nsamples/ngroups)), width = 3+.3*w*ngroups, units = "cm")
+ggsave(snakemake@output[["heatmap_sample"]], plot = heatmap_samples, height=10+round((nindices/600)*(nsamples/ngroups)), width = 8+.3*w*ngroups, units = "cm")
 rm(heatmap_samples)
 heatmap_groups = heatmap_base + facet_wrap(~group, ncol=(nsamples/ngroups))
-ggsave(snakemake@output[["heatmap_group"]], plot = heatmap_groups, height=3+round(3*(nindices/1000)), width = 3+.3*w*ngroups, units = "cm")
+ggsave(snakemake@output[["heatmap_group"]], plot = heatmap_groups, height=10+round(3*(nindices/1000)), width = 8+.3*w*ngroups, units = "cm")
 rm(heatmap_groups)
 rm(heatmap_base)
 
 #plot metagene and average heatmaps
-metagene_base = ggplot(data = raw %>% filter(cpm <= cutoff), aes(x=position, y=cpm, color=group, fill=group)) +
+#metagene_base = ggplot(data = raw %>% filter(cpm <= cutoff), aes(x=position, y=cpm, color=group, fill=group)) +
+metagene_base = ggplot(data = raw, aes(x=position, y=cpm, color=group, fill=group)) +
   geom_vline(xintercept = 0, size=2) +
   geom_smooth(method="gam", formula = y ~ s(x, bs="cr", k=knots), size=1.5, alpha=0.6, n=n_avg) +
   scale_y_continuous(position="right") +
