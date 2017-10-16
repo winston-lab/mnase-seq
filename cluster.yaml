@@ -1,6 +1,6 @@
 __default__ : 
     queue : "short"
-    time : "11:50"
+    time : 710
     n : 1
     mem : 2000
     name : "{rule}.{wildcards}"
@@ -8,100 +8,101 @@ __default__ :
     err : "logs/cluster/{rule}.{wildcards}.err"
 
 fastqc_raw:
-    time : "3:00"
+    time : 60
     n : 1
     mem : 2000
 
 demultiplex:
-    time : "6:00"
+    time : 360
     mem : 4000
 
 cutadapt:
-    time : "2:00"
+    time : 120
     mem : 1000 
 
 fastqc_processed:
-    time : "2:00"
+    time : 60
     mem : 4000
 
 bowtie:
-    time : "4:00"
+    time : 240
     n : 4
     mem : 2000
 
 gzip_loose_fastq:
-    time : "3:00"
+    time : 120
     n : 1
 
-deeptools_plotcoverage:
-    time : "11:50"
-    n : 4
-    mem : 3000
-
 nucwave:
-    time : "2:00"
+    time : 120
     mem : 3000
 
 get_fragments:
-    time : "2:00"
+    time : 120
     n : 4
     mem : 1000
 
 plot_fragsizes:
-    time : "2:00"
+    time : 60
     mem : 4000
 
 get_perbase_depth:
-    time : "1:00"
+    time : 60
     mem : 1000
 
 plot_depth:
-    time : "2:00"
+    time : 60
     mem : 4000
 
 midpoint_coverage:
-    time : "2:00"
+    time : 60
     mem : 2000
 
 total_coverage:
-    time : "2:00"
+    time : 60
     mem : 2000 
 
 map_to_windows:
-    time : "2:00"
+    time : 60
     mem : 4000
 
 plot_correlations:
-    time : "11:59"
+    time : 719
     mem : 20000
 
 smoothed_midpoint_coverage:
-    time : "6:00"
+    time : 120
     mem : 2000
 
 deeptools_matrix:
-    time : "2:00"
+    time : 60
     n : 1
     mem : 2000
 
-r_plotHeatmap:
-    time : "11:50"
-    mem : 10000
+gzip_deeptools_matrix:
+    time : 30
+    n : 1
+    mem : 2000
 
-cat_matrices:
-    time : "2:00"
+melt_matrix:
+    time : 30
+    n : 1
     mem : 2000
 
 r_datavis:
-    time : "11:50"
-    mem : 60000
+    time : 120
+    mem : 10000
+
+cat_matrices:
+    time : 60
+    mem : 2000
 
 meta_oneoff:
     queue : "priority"
-    time : "11:50"
+    time : 719
     mem : 60000
 
 dpos_deeptools_matrix:
-    time : "2:00"
+    time : 120
     n : 1
     mem : 2000

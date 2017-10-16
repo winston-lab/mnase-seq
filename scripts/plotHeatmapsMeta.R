@@ -1,119 +1,259 @@
+library(psych)
 library(tidyverse)
 library(forcats)
 library(viridis)
-library(RColorBrewer)
 
-raw = read_table2(snakemake@input[["matrix"]],
-	 col_names=c("group", "sample", "index", "position","cpm"),
-	 col_types=cols(group=col_character(), sample=col_character(), index=col_integer(), position=col_double(), cpm=col_double()))
-raw$sample = factor(raw$sample, ordered = TRUE)
-raw$group = factor(raw$group, ordered = TRUE)
+main = function(in.table, upstream, dnstream, cutoffpct, trimpct, ylab, refptlab, heatmap.cmap,
+                meta.pal, avghmap.cmap, out.hmapsample, out.hmapgroup, out.metasample, out.metaoverlaysample,
+                out.metaoverlayallsample, out.metagroup, out.metaoverlaygroup, out.metahmapsample, out.metahmapgroup){
+    raw = read_tsv(in.table,
+                   col_names=c("group","sample","index","position","cpm"),
+                   col_types=cols(group=col_character(), sample=col_character(),
+                                  index=col_integer(), position=col_double(),
+                                  cpm=col_double()))
+    raw$sample = fct_inorder(raw$sample, ordered = TRUE)
+    raw$group = fct_inorder(raw$group, ordered = TRUE)
+    
+    nindices =  max(raw$index, na.rm=TRUE)
+    nsamples = length(fct_unique(raw$sample))
+    ngroups = length(fct_unique(raw$group))
+    
+    #percentile cutoff for heatmap visualization
+    cutoff = quantile(raw$cpm, probs=cutoffpct, na.rm=TRUE)
+    
+    #plot heatmap facetted by sample and group
+    heatmap_base = ggplot(data = raw %>% mutate_at(vars(cpm), funs(pmin(cutoff, .)))) +
+        geom_raster(aes(x=position, y=index, fill=cpm)) +
+        scale_y_reverse(name=paste(nindices, ylab), expand=c(0.01,0)) +
+        scale_x_continuous(breaks = c(-upstream/1000, 0, dnstream/1000),
+                           labels=c(ifelse(upstream>200, -upstream/1000, ''),
+                                    refptlab,
+                                    ifelse(dnstream>200, dnstream/1000, '')),
+                           minor_breaks = scales::pretty_breaks(n=10),
+                           name=paste("distance from", refptlab, "(kb)")) +
+        scale_fill_viridis(option = heatmap.cmap, na.value="#FFFFFF00",
+                           name="MNase-seq signal",
+                           guide=guide_colorbar(title.position="top", barwidth=15,
+                                                barheight=1, title.hjust=0.5)) +
+        theme_minimal() +
+        theme(text = element_text(size=12, face="bold", color="black"),
+              legend.position = "top",
+              legend.text = element_text(size=8, face="plain"),
+              strip.text = element_text(size=12, face="bold", color="black"),
+              axis.text.y = element_blank(),
+              axis.text.x = element_text(size=12, face="bold", color="black", margin = unit(c(0,0,0,0),"cm")),
+              panel.grid.major.x = element_line(color="black"),
+              panel.grid.minor.x = element_line(color="grey80"),
+              panel.grid.major.y = element_line(color="grey80"),
+              panel.grid.minor.y = element_blank(),
+              panel.spacing.x = unit(.5, "cm"))
+  
+    hmap.width = max(12, ((upstream+dnstream)/200)*(nsamples/ngroups))
+    
+    heatmap_samples = heatmap_base + facet_wrap(~sample, ncol=(nsamples/ngroups), dir="v")
+    ggsave(out.hmapsample, plot = heatmap_samples,
+           height= (.0005*nindices+7.5)*ngroups,
+           width = hmap.width, units = "cm", limitsize=FALSE)
+    rm(heatmap_samples)
+    gc()
+    heatmap_groups = heatmap_base + facet_wrap(~group, ncol=ngroups)
+    ggsave(out.hmapgroup, plot = heatmap_groups,
+           height= .002*nindices+14.75,
+           width = hmap.width, units = "cm", limitsize=FALSE)
+    rm(heatmap_groups)
+    rm(heatmap_base)
+    gc()
+    
+    #plot metagene and average heatmaps
+    metadf.sample = raw %>% group_by(sample, position) %>%
+        summarise(group = unique(group), mean = mean(cpm), sd = sd(cpm), trim.mean = mean(cpm, trim=trimpct),
+                  win.mean = winsor.mean(cpm, trim=trimpct), win.sd = winsor.sd(cpm, trim=trimpct))
+    
+    meta.width = max(10, 2+(upstream+dnstream)/200)
+    
+    metaplot.sample= ggplot(data = metadf.sample,
+                            aes(x=position, y=win.mean,
+                                ymin=win.mean-win.sd, ymax=win.mean+win.sd,
+                                color=group, fill=group)) +
+                        geom_vline(xintercept=0, size=1) +
+                        geom_ribbon(alpha=0.2, size=0) +
+                        geom_line(size=1) +
+                        scale_y_continuous(position="right", name=NULL) +
+                        scale_x_continuous(name=paste("position relative to",
+                                                      refptlab, "(kb)")) +
+                        scale_fill_brewer(palette = meta.pal, guide=FALSE, direction=-1) +
+                        scale_color_brewer(palette = meta.pal, guide=FALSE, direction=-1) +
+                        facet_grid(sample~., switch="y") +
+                        theme_minimal() +
+                        theme(text = element_text(size=12, face="bold", color="black"),
+                              axis.text.y = element_text(size=10, face="plain", color="black"),
+                              axis.text.x = element_text(size=12, face="bold", color="black"),
+                              strip.text.y = element_text(size=12, face="bold", color="black", angle=180, hjust=1),
+                              panel.grid.major = element_line(color="grey85"),
+                              panel.grid.minor = element_line(color="grey95"))
+    
+    ggsave(out.metasample, plot = metaplot.sample, height = 2*nsamples, width = meta.width, units = "cm")
+    rm(metaplot.sample)
+    gc()
+    
+    metaoverlay.sample= ggplot(data = metadf.sample,
+                            aes(x=position, y=win.mean,
+                                ymin=win.mean-win.sd, ymax=win.mean+win.sd,
+                                group=sample, color=group, fill=group)) +
+                        geom_vline(xintercept=0, size=1) +
+                        geom_ribbon(alpha=0.05, size=0) +
+                        geom_line(size=1, alpha=0.5) +
+                        scale_y_continuous(position="right", name=NULL) +
+                        scale_x_continuous(name=paste("position relative to",
+                                                      refptlab, "(kb)")) +
+                        scale_fill_brewer(palette = meta.pal, guide=FALSE, direction=-1) +
+                        scale_color_brewer(palette = meta.pal, guide=FALSE, direction=-1) +
+                        theme_minimal() +
+                        facet_grid(group~., switch="y") +
+                        theme(text = element_text(size=12, face="bold", color="black"),
+                              axis.text.y = element_text(size=10, face="plain", color="black"),
+                              axis.text.x = element_text(size=12, face="bold", color="black"),
+                              strip.text.y = element_text(size=12, face="bold", color="black", angle=180, hjust=1),
+                              panel.grid.major = element_line(color="grey85"),
+                              panel.grid.minor = element_line(color="grey95"))
+    
+    ggsave(out.metaoverlaysample, plot = metaoverlay.sample, height = 3*ngroups, width = meta.width, units = "cm")
+    
+    metaoverlay.allsample= ggplot(data = metadf.sample,
+                            aes(x=position, y=win.mean,
+                                group=sample, color=group, fill=group)) +
+                        geom_vline(xintercept=0, size=1) +
+                        geom_line(size=1, alpha=0.5) +
+                        scale_y_continuous(name="MNase-seq signal") +
+                        scale_x_continuous(name=paste("position relative to",
+                                                      refptlab, "(kb)")) +
+                        scale_fill_brewer(palette = meta.pal, guide=FALSE, direction=-1) +
+                        scale_color_brewer(palette = meta.pal, guide=guide_legend(), direction=-1) +
+                        theme_minimal() +
+                        theme(text = element_text(size=12, face="bold", color="black"),
+                              axis.text.y = element_text(size=10, face="plain", color="black"),
+                              axis.text.x = element_text(size=12, face="bold", color="black"),
+                              panel.grid.major = element_line(color="grey85"),
+                              panel.grid.minor = element_line(color="grey95"),
+                              legend.title = element_blank(),
+                              legend.text = element_text(size=12, face="bold", color="black"),
+                              legend.position="top")
+    ggsave(out.metaoverlayallsample, plot = metaoverlay.allsample, height=7, width = meta.width, units = "cm")
+    
+    metadf.group = raw %>% group_by(group, position) %>% 
+        summarise(mean = mean(cpm), sd = sd(cpm), trim.mean = mean(cpm, trim=trimpct),
+                  win.mean = winsor.mean(cpm, trim=trimpct), win.sd = winsor.sd(cpm, trim=trimpct))
+    
+    metaplot.group = ggplot(data = metadf.group,
+                            aes(x=position, y=win.mean,
+                                ymin=win.mean-win.sd, ymax=win.mean+win.sd,
+                                color=group, fill=group)) +
+                        geom_vline(xintercept=0, size=1) +
+                        geom_ribbon(alpha=0.2, size=0) +
+                        geom_line(size=1) +
+                        scale_y_continuous(position="right", name=NULL,
+                                           breaks = scales::pretty_breaks(n=3)) +
+                        scale_x_continuous(name=paste("position relative to",
+                                                      refptlab, "(kb)")) +
+                        scale_fill_brewer(palette = meta.pal, guide=FALSE, direction=-1) +
+                        scale_color_brewer(palette = meta.pal, guide=FALSE, direction=-1) +
+                        facet_grid(group~., switch="y") +
+                        theme_minimal() +
+                        theme(text = element_text(size=12, face="bold", color="black"),
+                              axis.text.y = element_text(size=10, face="plain", color="black"),
+                              axis.text.x = element_text(size=12, face="bold", color="black"),
+                              strip.text.y = element_text(angle=180, hjust=1),
+                              panel.grid.major = element_line(color="grey85"),
+                              panel.grid.minor = element_line(color="grey95"))
+    
+    ggsave(out.metagroup, plot = metaplot.group, height = 3*ngroups, width = meta.width, units = "cm")
+    rm(metaplot.group)
+    gc()
+    metaoverlay.group = ggplot(data = metadf.group,
+                            aes(x=position, y=win.mean,
+                                ymin=win.mean-win.sd, ymax=win.mean+win.sd,
+                                color=group, fill=group)) +
+                        geom_vline(xintercept=0, size=1) +
+                        geom_ribbon(alpha=0.1, size=0) +
+                        geom_line(alpha=0.8, size=1) +
+                        scale_y_continuous(name="MNase-seq signal") +
+                        scale_x_continuous(name=paste("position relative to",
+                                                      refptlab, "(kb)")) +
+                        scale_fill_brewer(palette = meta.pal, direction=-1) +
+                        scale_color_brewer(palette = meta.pal, direction=-1) +
+                        theme_minimal() +
+                        theme(text = element_text(size=12, face="bold", color="black"),
+                              axis.text.y = element_text(size=10, face="plain", color="black"),
+                              axis.text.x = element_text(size=12, face="bold", color="black"),
+                              strip.text.y = element_text(angle=180, hjust=1),
+                              panel.grid.major = element_line(color="grey85"),
+                              panel.grid.minor = element_line(color="grey95"),
+                              legend.title = element_blank(),
+                              legend.position = "top",
+                              legend.text = element_text(size=12, face="bold", color="black"))
+    
+    ggsave(out.metaoverlaygroup, plot = metaoverlay.group, height = 7, width = meta.width, units = "cm")
+    rm(metaoverlay.group)
+    gc()
+    
+    #average heatmap by sample
+    metahmap.sample = ggplot(data = metadf.sample, aes(x=position, y=fct_rev(sample), fill=win.mean)) +
+                            geom_raster() +
+                            scale_fill_viridis(option = avghmap.cmap, name="MNase-seq signal", guide=
+                                               guide_colorbar(title.position="top", title.hjust=0.5, barwidth=8)) +
+                            scale_x_continuous(expand = c(0.01, 0),
+                                               name=paste("position relative to", refptlab, "(kb)")) +
+                            theme_minimal() +
+                            theme(text = element_text(size=12, face="bold", color="black"),
+                                  legend.position="top",
+                                  axis.title.y = element_blank(),
+                                  axis.text = element_text(size=12, face="bold", color="black"),
+                                  legend.text = element_text(size=10, face="plain"),
+                                  panel.grid.major.x = element_line(color="black", size=1),
+                                  panel.grid.major.y = element_blank())
+    ggsave(out.metahmapsample, plot = metahmap.sample, height = nsamples+2, width = meta.width, units = "cm")
+    rm(metahmap.sample)
+    gc()
+    
+    #average heatmap by group
+    metahmap.group = ggplot(data = metadf.group, aes(x=position, y=fct_rev(group), fill=win.mean)) +
+                            geom_raster() +
+                            scale_fill_viridis(option = avghmap.cmap, name="MNase-seq signal", guide=
+                                               guide_colorbar(title.position="top", title.hjust=0.5, barwidth=8)) +
+                            scale_x_continuous(expand = c(0.01, 0),
+                                               name=paste("position relative to", refptlab, "(kb)")) +
+                            theme_minimal() +
+                            theme(text = element_text(size=12, face="bold", color="black"),
+                                  legend.position="top",
+                                  axis.title.y = element_blank(),
+                                  axis.text = element_text(size=12, face="bold", color="black"),
+                                  legend.text = element_text(size=10, face="plain"),
+                                  panel.grid.major.x = element_line(color="black", size=1),
+                                  panel.grid.major.y = element_blank())
+    
+    ggsave(out.metahmapgroup, plot = metahmap.group, height = 1.5*ngroups+2, width = meta.width, units = "cm")
+    rm(metahmap.group)
+    gc()
+}
 
-#for cubic spline fitting, set number of knots to around 3 per expected nucleosome (i.e. per 148 bp)
-knots = round((max(raw$position) - min(raw$position))*1000/148*3)
-#number of positions to evaluate smoothed fit at
-n_avg = 1000/snakemake@params[["binsize"]]*(max(raw$position)- min(raw$position))
-
-nindices =  max(raw$index)
-nsamples = length(fct_unique(raw$sample))
-ngroups = length(fct_unique(raw$group))
-w = round((max(raw$position) - min(raw$position))*1000/148)
-
-upstream = snakemake@params[["upstream"]]
-downstream = snakemake@params[["dnstream"]]
-
-#pseudocount for log-transform
-#pcount = .01
-
-#percentile cutoff for heatmap visualization
-cutoff = quantile(raw$cpm, probs=snakemake@params[["pct_cutoff"]], na.rm=TRUE)
-
-#plot heatmap facetted by sample and group
-heatmap_base = ggplot(data = raw %>% mutate_at(vars(cpm), funs(pmin(cutoff, .)))) + 
-  geom_tile(aes(x=position, y=index, fill=cpm)) +
-  scale_y_reverse(name=paste(nindices, snakemake@params[["ylabel"]])) +
-  scale_x_continuous(breaks = c(-upstream/1000, 0, downstream/1000), labels=c(-upstream/1000, snakemake@params[["refpointlabel"]], downstream/1000)) +
-  xlab(paste("distance from", snakemake@params[["refpointlabel"]], "(kb)")) +
-  scale_fill_viridis(option = snakemake@params[["heatmap_cmap"]],na.value="white", name="normalized MNase-seq fragment midpoints", guide=guide_colorbar(title.position="top", barwidth=15, barheight=1, title.hjust=0.5)) +
-  theme_minimal() +
-  theme(strip.text = element_text(size=12, face="bold"),
-        legend.position = "top",
-        axis.text.y = element_blank(),
-        axis.text.x = element_text(size=12, face="bold", color="black"),
-        axis.title.y = element_text(size=12, face="bold"),
-        axis.title.x = element_text(size=12, face="bold"),
-        axis.ticks.length = unit(-2, "mm"))
-
-
-heatmap_samples = heatmap_base + facet_wrap(~sample, ncol=(nsamples/ngroups))
-ggsave(snakemake@output[["heatmap_sample"]], plot = heatmap_samples, height=10+round((nindices/600)*(nsamples/ngroups)), width = 8+.3*w*ngroups, units = "cm")
-rm(heatmap_samples)
-heatmap_groups = heatmap_base + facet_wrap(~group, ncol=(nsamples/ngroups))
-ggsave(snakemake@output[["heatmap_group"]], plot = heatmap_groups, height=10+round(3*(nindices/1000)), width = 8+.3*w*ngroups, units = "cm")
-rm(heatmap_groups)
-rm(heatmap_base)
-
-#plot metagene and average heatmaps
-#metagene_base = ggplot(data = raw %>% filter(cpm <= cutoff), aes(x=position, y=cpm, color=group, fill=group)) +
-metagene_base = ggplot(data = raw, aes(x=position, y=cpm, color=group, fill=group)) +
-  geom_vline(xintercept = 0, size=2) +
-  geom_smooth(method="gam", formula = y ~ s(x, bs="cr", k=knots), size=1.5, alpha=0.6, n=n_avg) +
-  scale_y_continuous(position="right") +
-  xlab(paste("position relative to", snakemake@params[["refpointlabel"]], "(kb)")) +
-  scale_fill_brewer(palette=snakemake@params[["metagene_palette"]]) +
-  scale_color_brewer(palette=snakemake@params[["metagene_palette"]]) +
-  theme_minimal() +
-  theme(axis.text.x = element_text(size=12),
-        axis.title.x = element_text(size=12, face="bold"),
-        #axis.title.y.right = element_text(angle=0, vjust=0.5),
-        axis.title.y.right = element_blank(),
-        strip.text.y = element_text(size=12, angle=180, face="bold", hjust=1))
-
-metagene_samples = metagene_base + facet_grid(sample~., switch="y") + theme(legend.position = "none")
-ggsave(snakemake@output[["metagene_sample"]], plot = metagene_samples, height = 3*nsamples, width = 5+.7*w, units = "cm")
-
-#average heatmap by sample
-metagene_samples.fit = ggplot_build(metagene_samples)$data[[2]]
-rm(metagene_samples)
-metagene_samples.fit$sample = factor(metagene_samples.fit$PANEL, labels = levels(raw$sample), ordered = TRUE) %>% fct_rev
-
-avg_heatmap_samples = ggplot(data = metagene_samples.fit, aes(x=x, y=sample)) +
-  geom_tile(aes(fill=y)) +
-  scale_fill_viridis(option = snakemake@params[["avg_heatmap_cmap"]], guide_colorbar(title = "normalized\nMNase-seq\nfragment\nmidpoints")) +
-  xlab(paste("position relative to", snakemake@params[["refpointlabel"]], "(kb)")) +
-  theme_minimal() +
-  theme(axis.text = element_text(size=12),
-        axis.title.x = element_text(size=12, face="bold"),
-        axis.title.y = element_blank(),
-        axis.text.y = element_text(face="bold"),
-        legend.title = element_text())
-ggsave(snakemake@output[["metaheatmap_sample"]], plot = avg_heatmap_samples, height = 2*nsamples, width = 8+.5*w, units = "cm")
-rm(avg_heatmap_samples)
-
-#metagene by group
-metagene_group = metagene_base + facet_grid(group~., switch="y") + theme(legend.position = "none")
-ggsave(snakemake@output[["metagene_group"]], plot = metagene_group, height = 4*ngroups, width = 5+.7*w, units = "cm")
-
-#average heatmap by group
-metagene_group.fit = ggplot_build(metagene_group)$data[[2]]
-rm(metagene_group)
-metagene_group.fit$group = factor(metagene_group.fit$group, labels = levels(raw$group), ordered = TRUE) %>% fct_rev
-
-avg_heatmap_groups = ggplot(data = metagene_group.fit, aes(x=x, y=group)) +
-  geom_tile(aes(fill=y)) +
-  scale_fill_viridis(option = snakemake@params[["avg_heatmap_cmap"]], guide_colorbar(title = "normalized\nMNase-seq\nfragment\nmidpoints")) +
-  xlab(paste("position relative to", snakemake@params[["refpointlabel"]], "(kb)")) +
-  theme_minimal() +
-  theme(axis.text = element_text(size=12),
-        axis.title.x = element_text(size=12, face="bold"),
-        axis.title.y = element_blank(),
-        axis.text.y = element_text(face="bold"),
-        legend.title = element_text())
-ggsave(snakemake@output[["metaheatmap_group"]], plot = avg_heatmap_groups, height = 2*ngroups, width = 8+.5*w, units = "cm")
-rm(avg_heatmap_groups)
-
-#plot overlaid metagene
-metagene_overlay = metagene_base + theme(legend.position = "left", legend.title = element_blank(), legend.text = element_text(face="bold"))
-ggsave(snakemake@output[["metagene_overlay"]], plot = metagene_overlay, height = 10, width = 8+.8*w, units = "cm")
-rm(metagene_overlay)
-rm(metagene_base)
+main(
+    in.table = snakemake@input[["matrix"]],
+    upstream = snakemake@params[["upstream"]],
+    dnstream = snakemake@params[["dnstream"]],
+    cutoffpct = snakemake@params[["pct_cutoff"]],
+    trimpct = snakemake@params[["trim_pct"]],
+    ylab = snakemake@params[["ylabel"]], 
+    refptlab = snakemake@params[["refpointlabel"]],
+    heatmap.cmap = snakemake@params[["heatmap_cmap"]],
+    meta.pal = snakemake@params[["metagene_palette"]],
+    avghmap.cmap = snakemake@params[["avg_heatmap_cmap"]],
+    out.hmapsample = snakemake@output[["heatmap_sample"]],
+    out.hmapgroup = snakemake@output[["heatmap_group"]],
+    out.metasample = snakemake@output[["metagene_sample"]],
+    out.metaoverlaysample = snakemake@output[["metagene_sample_overlay"]],
+    out.metaoverlayallsample = snakemake@output[["metagene_sample_overlay_all"]],
+    out.metagroup = snakemake@output[["metagene_group"]],
+    out.metaoverlaygroup = snakemake@output[["metagene_overlay"]],
+    out.metahmapsample = snakemake@output[["metaheatmap_sample"]],
+    out.metahmapgroup = snakemake@output[["metaheatmap_group"]]
+)

@@ -20,9 +20,6 @@ localrules: all,
             cat_perbase_depth,
             seq_depth_norm,
             make_bigwig_for_deeptools,
-            melt_matrix,
-            gzip_deeptools_table,
-            cat_matrices,
             group_bam_for_danpos,
             dpos_wig_to_bigwig,
             dpos_gzip_deeptools_table,
@@ -33,10 +30,10 @@ rule all:
     input:
         "qual_ctrl/raw",
         "qual_ctrl/frag-size-dist.svg",
-        "qual_ctrl/seq-depth-dist.svg",
-        expand("nucwave/{sample}/{sample}_depth_wl_trimmed_PE.wig", sample=SAMPLES),
+        # "qual_ctrl/seq-depth-dist.svg",
+        # expand("nucwave/{sample}/{sample}_depth_wl_trimmed_PE.wig", sample=SAMPLES),
         expand("coverage/{sample}-mnase-midpoint-CPM.bedgraph", sample=SAMPLES),
-        "correlations/pca-scree.svg",
+        # "correlations/pca-scree.svg",
         expand("alignment/unaligned-{sample}_2.fastq.gz", sample=SAMPLES),
         expand("coverage/bw/{sample}-mnase-midpoint-CPM-smoothed.bw", sample=SAMPLES),
         expand("datavis/{annotation}/mnase-{annotation}-metaheatmap-bygroup.svg", annotation = config["annotations"]),
@@ -197,22 +194,6 @@ rule samtools_index:
         (samtools index -b {input}) &> {log}
         """
 
-rule deeptools_plotcoverage:
-    input:
-        bam = expand("alignment/{sample}.bam", sample=SAMPLES),
-        index = expand("alignment/{sample}.bam.bai", sample=SAMPLES)
-    output:
-        table= "qual_ctrl/coverage.tsv",
-        fig="qual_ctrl/coverage.svg"
-    params:
-        min_ins = config["bowtie"]["min_ins"],
-        max_ins = config["bowtie"]["max_ins"]
-    log: "logs/deeptools/deeptools_plotcoverage.log"
-    threads: config["threads"]
-    shell: """
-        (plotCoverage --outRawCounts {output.table} -p {threads} -v --extendReads --minFragmentLength {params.min_ins} --maxFragmentLength {params.max_ins} -b {input.bam} -o {output.fig}) &> {log}
-        """
-
 rule build_nucwave_input:
     input:
        "alignment/{sample}.bam"
@@ -257,23 +238,25 @@ rule get_fragsizes:
         "alignment/fragments/{sample}-fragments.bedpe"
     output:
         temp("alignment/fragments/.{sample}-fragsizes.tsv")
+    params:
+        group = lambda wildcards: config["samples"][wildcards.sample]["group"]
     log : "logs/get_fragsizes/get_fragsizes-{sample}.log"
     shell: """
-        (awk -v sample={wildcards.sample} 'BEGIN{{FS=OFS="\t"; srand()}} !/^$/ {{if (rand()<= .08) print sample , $6-$2}}' {input} > {output}) &> {log}
+        (awk -v sample={wildcards.sample} -v group={params.group} 'BEGIN{{FS=OFS="\t"; srand()}} !/^$/ {{if (rand()<= .08) print sample, group, $6-$2}}' {input} > {output}) &> {log}
         """
 
 rule cat_fragsizes:
     input:
         expand("alignment/fragments/.{sample}-fragsizes.tsv", sample=SAMPLES)
     output:
-        "alignment/fragments/fragsizes.tsv"
+        "alignment/fragments/fragsizes.tsv.gz"
     shell: """
-        cat {input} > {output}
+        cat {input} | pigz -f > {output}
         """
 
 rule plot_fragsizes:
     input:
-        table = "alignment/fragments/fragsizes.tsv"
+        table = "alignment/fragments/fragsizes.tsv.gz"
     output:
         plot = "qual_ctrl/frag-size-dist.svg"
     script:
@@ -442,21 +425,19 @@ rule deeptools_matrix:
         binstat = lambda wildcards: config["annotations"][wildcards.annotation]["binstat"]
     threads : config["threads"]
     log: "logs/deeptools/computeMatrix-{annotation}-{sample}.log"
-    #shell: """
-    #    (computeMatrix reference-point -R {input.annotation} -S {input.bw} --referencePoint {params.refpoint} -out {output.dtfile} --outFileNameMatrix {output.matrix} -b {params.upstream} -a {params.dnstream} --nanAfterEnd --binSize {params.binsize} --sortRegions {params.sort} --sortUsing {params.sortusing} --averageTypeBins {params.binstat} -p {threads}) &> {log}
-    #    """
-    shell: """
-        (computeMatrix reference-point -R {input.annotation} -S {input.bw} --referencePoint {params.refpoint} -out {output.dtfile} --outFileNameMatrix {output.matrix} -b {params.upstream} -a {params.dnstream} --binSize {params.binsize} --sortRegions {params.sort} --sortUsing {params.sortusing} --averageTypeBins {params.binstat} -p {threads}) &> {log}
-        """
-rule gzip_deeptools_table:
+    run:
+        if config["annotations"][wildcards.annotation]["nan_afterend"]=="y":
+            shell("(computeMatrix reference-point -R {input.annotation} -S {input.bw} --referencePoint {params.refpoint} -out {output.dtfile} --outFileNameMatrix {output.matrix} -b {params.upstream} -a {params.dnstream} --nanAfterEnd --binSize {params.binsize} --sortRegions {params.sort} --sortUsing {params.sortusing} --averageTypeBins {params.binstat} -p {threads}) &> {log}")
+        else:
+            shell("(computeMatrix reference-point -R {input.annotation} -S {input.bw} --referencePoint {params.refpoint} -out {output.dtfile} --outFileNameMatrix {output.matrix} -b {params.upstream} -a {params.dnstream} --binSize {params.binsize} --sortRegions {params.sort} --sortUsing {params.sortusing} --averageTypeBins {params.binstat} -p {threads}) &> {log}")
+
+rule gzip_deeptools_matrix:
     input:
-        tsv = "datavis/{annotation}/{annotation}-{sample}.tsv",
-        mat = "datavis/{annotation}/{annotation}-{sample}.mat.gz"
+        matrix = "datavis/{annotation}/{annotation}-{sample}.tsv"
     output:
         "datavis/{annotation}/{annotation}-{sample}.tsv.gz"
     shell: """
-        pigz -f {input.tsv}
-        rm {input.mat}
+        pigz -f {input}
         """
 
 rule melt_matrix:
@@ -465,13 +446,12 @@ rule melt_matrix:
     output:
         temp("datavis/{annotation}/{annotation}-{sample}-melted.tsv.gz")
     params:
-        name = lambda wildcards : wildcards.sample,
         group = lambda wildcards : SAMPLES[wildcards.sample]["group"],
         binsize = lambda wildcards : config["annotations"][wildcards.annotation]["binsize"],
         upstream = lambda wildcards : config["annotations"][wildcards.annotation]["upstream"],
         dnstream = lambda wildcards : config["annotations"][wildcards.annotation]["dnstream"]
     script:
-        "scripts/melt_matrix2.R"
+        "scripts/melt_matrix.R"
 
 rule cat_matrices:
     input:
@@ -489,15 +469,17 @@ rule r_datavis:
         heatmap_sample = "datavis/{annotation}/mnase-{annotation}-heatmap-bysample.svg",
         heatmap_group = "datavis/{annotation}/mnase-{annotation}-heatmap-bygroup.svg",
         metagene_sample = "datavis/{annotation}/mnase-{annotation}-metagene-bysample.svg",
+        metagene_sample_overlay = "datavis/{annotation}/mnase-{annotation}-metagene-sampleolaybygroup.svg",
+        metagene_sample_overlay_all = "datavis/{annotation}/mnase-{annotation}-metagene-sampleolayall.svg",
         metagene_group = "datavis/{annotation}/mnase-{annotation}-metagene-bygroup.svg",
-        metagene_overlay = "datavis/{annotation}/mnase-{annotation}-metagene-groupoverlay.svg",
+        metagene_overlay = "datavis/{annotation}/mnase-{annotation}-metagene-groupolay.svg",
         metaheatmap_sample = "datavis/{annotation}/mnase-{annotation}-metaheatmap-bysample.svg",
         metaheatmap_group = "datavis/{annotation}/mnase-{annotation}-metaheatmap-bygroup.svg"
     params:
-        binsize = lambda wildcards : config["annotations"][wildcards.annotation]["binsize"],
         upstream = lambda wildcards : config["annotations"][wildcards.annotation]["upstream"],
         dnstream = lambda wildcards : config["annotations"][wildcards.annotation]["dnstream"],
         pct_cutoff = lambda wildcards : config["annotations"][wildcards.annotation]["pct_cutoff"],
+        trim_pct = lambda wildcards : config["annotations"][wildcards.annotation]["trim_pct"],
         heatmap_cmap = lambda wildcards : config["annotations"][wildcards.annotation]["heatmap_colormap"],
         metagene_palette = lambda wildcards : config["annotations"][wildcards.annotation]["metagene_palette"],
         avg_heatmap_cmap = lambda wildcards : config["annotations"][wildcards.annotation]["avg_heatmap_cmap"],
