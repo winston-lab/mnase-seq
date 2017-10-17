@@ -15,17 +15,18 @@ raw$sample = as_factor(raw$sample) %>% fct_rev()
 #              axis.title = element_text(size=14, face="bold"))
 
 p2 = ggplot(data = raw, aes(x=fragsize, y=sample, fill=group)) +
-        geom_density_ridges() +
+        geom_density_ridges(alpha=0.9) +
         scale_fill_brewer(palette="Set1", guide=FALSE) +
         scale_x_continuous(expand = c(0.01, 0),
                            name="fragment size (bp)",
-                           breaks = scales::pretty_breaks(n=10)) +
+                           breaks = scales::pretty_breaks(n=6)) +
         scale_y_discrete(expand = c(0.01, 0)) +
         theme_minimal() +
         theme(text = element_text(size=12, face="bold", color="black"),
               axis.text = element_text(size=12, face="bold", color="black"),
               axis.title.y = element_blank(),
-              axis.text.y = element_text(vjust=0))
+              axis.text.y = element_text(vjust=0),
+              panel.grid.major.x = element_line(color="grey40"))
 
 h = length(fct_unique(raw$sample))
 

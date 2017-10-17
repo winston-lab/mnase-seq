@@ -27,7 +27,7 @@ fastqc_processed:
 bowtie:
     time : 240
     n : 4
-    mem : 2000
+    mem : 8000
 
 gzip_loose_fastq:
     time : 120
@@ -40,7 +40,7 @@ nucwave:
 get_fragments:
     time : 120
     n : 4
-    mem : 1000
+    mem : 4000
 
 plot_fragsizes:
     time : 60

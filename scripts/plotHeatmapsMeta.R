@@ -48,17 +48,17 @@ main = function(in.table, upstream, dnstream, cutoffpct, trimpct, ylab, refptlab
               panel.grid.minor.y = element_blank(),
               panel.spacing.x = unit(.5, "cm"))
   
-    hmap.width = max(12, ((upstream+dnstream)/200)*(nsamples/ngroups))
+    hmap.width = max(12, (.0008*(upstream+dnstream)+3.4)*ngroups)
     
-    heatmap_samples = heatmap_base + facet_wrap(~sample, ncol=(nsamples/ngroups), dir="v")
+    heatmap_samples = heatmap_base + facet_wrap(~sample, ncol=ngroups, dir="v")
     ggsave(out.hmapsample, plot = heatmap_samples,
-           height= (.0005*nindices+7.5)*ngroups,
+           height= (.0005*nindices+7.5)*nsamples/ngroups,
            width = hmap.width, units = "cm", limitsize=FALSE)
     rm(heatmap_samples)
     gc()
     heatmap_groups = heatmap_base + facet_wrap(~group, ncol=ngroups)
     ggsave(out.hmapgroup, plot = heatmap_groups,
-           height= .002*nindices+14.75,
+           height= .0009*nindices+11.5,
            width = hmap.width, units = "cm", limitsize=FALSE)
     rm(heatmap_groups)
     rm(heatmap_base)
@@ -101,7 +101,7 @@ main = function(in.table, upstream, dnstream, cutoffpct, trimpct, ylab, refptlab
                                 ymin=win.mean-win.sd, ymax=win.mean+win.sd,
                                 group=sample, color=group, fill=group)) +
                         geom_vline(xintercept=0, size=1) +
-                        geom_ribbon(alpha=0.05, size=0) +
+                        #geom_ribbon(alpha=0.05, size=0) +
                         geom_line(size=1, alpha=0.5) +
                         scale_y_continuous(position="right", name=NULL) +
                         scale_x_continuous(name=paste("position relative to",
@@ -171,10 +171,10 @@ main = function(in.table, upstream, dnstream, cutoffpct, trimpct, ylab, refptlab
     gc()
     metaoverlay.group = ggplot(data = metadf.group,
                             aes(x=position, y=win.mean,
-                                ymin=win.mean-win.sd, ymax=win.mean+win.sd,
+                        #        ymin=win.mean-win.sd, ymax=win.mean+win.sd,
                                 color=group, fill=group)) +
                         geom_vline(xintercept=0, size=1) +
-                        geom_ribbon(alpha=0.1, size=0) +
+                        #geom_ribbon(alpha=0.1, size=0) +
                         geom_line(alpha=0.8, size=1) +
                         scale_y_continuous(name="MNase-seq signal") +
                         scale_x_continuous(name=paste("position relative to",
