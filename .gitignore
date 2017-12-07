@@ -1,6 +1,7 @@
 barcodes.tsv
 fastq/*
-logs/
+logs/*
+logs/cluster/*
 .snakemake/
 alignment/
 coverage/
@@ -16,6 +17,8 @@ danpos/
 
 config.yaml
 
-*Rplots.pdf
+Rplots.pdf
 !fastq/.gitkeep
+!logs/.gitkeep
+!logs/cluster/
 !logs/cluster/.gitkeep
