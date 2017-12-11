@@ -45,7 +45,7 @@ rule all:
         expand("fastq/{sample}.{read}.fastq.gz", sample=SAMPLES, read=["r1","r2"]),
         #alignment
         expand("alignment/{sample}.bam", sample=SAMPLES),
-        # expand("alignment/unaligned-{sample}_{r}.fastq.gz", sample=SAMPLES, r=[1,2]),
+        expand("alignment/unaligned-{sample}_{r}.fastq.gz", sample=SAMPLES, r=[1,2]),
         # expand("alignment/fragments/{sample}-fragments.bedpe", sample=SAMPLES)
 
 rule make_barcode_file:
@@ -185,24 +185,43 @@ rule gzip_loose_fastq:
         pigz -f {input.unaligned_r2}
         """
 
-#TODO: separate by species?
+rule samtools_index:
+    input:
+        "alignment/{sample}.bam"
+    output:
+        "alignment/{sample}.bam.bai"
+    log:
+        "logs/samtools_index/samtools_index-{sample}.log"
+    shell: """
+        (samtools index -b {input}) &> {log}
+        """
+
+rule bam_separate_species:
+    input:
+        bam = "alignment/{sample}.bam",
+        bai = "alignment/{sample}.bam.bai",
+        chrsizes = config["combinedgenome"]["chrsizes"]
+    output:
+        "alignment/{sample}-{species}only.bam"
+    log: "logs/bam_separate_species/bam_separate_species-{sample}-{species}.log"
+    shell: """
+        (samtools view -b {input.bam} $(grep {wildcards.species} {input.chrsizes} | awk 'BEGIN{{FS="\t"; ORS=" "}}{{print $1}}') > {output}) &> {log}
+        """
+
 rule get_fragments:
     input:
-        bam = "alignment/{sample}.bam"
+        bam = "alignment/{sample}-{species}only.bam"
     output:
-        "alignment/fragments/{sample}-fragments.bedpe"
-    threads: config["threads"]
-    log : "logs/get_fragments/get_fragments-{sample}.log"
+        "alignment/fragments/{sample}-{species}fragments.bedpe"
+    log : "logs/get_fragments/get_fragments-{sample}-{species}.log"
     shell: """
-        (bedtools bamtobed -bedpe -i {input.bam} > {output}) &> {log}
+        (bedtools bamtobed -bedpe -i {input.bam} | grep {wildcards.species} | sed -e 's/{wildcards.species}//g' > {output}) &> {log}
         """
 
 rule midpoint_coverage:
     input:
-        bedpe = "alignment/fragments/{sample}-fragments.bedpe",
-        chrsizes = config["genome"]["chrsizes"]
-    params:
-        prefix = lambda wildcards: config["combinedgenome"]["experimental_prefix"] if wildcards.counttype=="counts" else config["combinedgenome"]["spikein_prefix"]
+        bedpe = lambda wildcards: "alignment/fragments/{sample}-" + config["combinedgenome"]["experimental_prefix"] + "fragments.bedpe" if wildcards.counttype="counts" else "alignment/fragments/{sample}-" + config["combinedgenome"]["spikein_prefix"] + "fragments.bedpe",
+        chrsizes = lambda wildcards: config["genome"]["chrsizes"] if wildcards.counttype=="counts" else config["genome"]["sichrsizes"]
     output:
         "coverage/{counttype}/{sample}-mnase-midpoint-{counttype}.bedgraph"
     log: "logs/midpoint_coverage/midpoint_coverage-{sample}-{counttype}.log"
@@ -210,28 +229,41 @@ rule midpoint_coverage:
         (awk 'BEGIN{{FS=OFS="\t"}} width=$6-$2 {{if(width % 2 != 0){{width -= 1}}; mid=$2+width/2; print $1, mid, mid+1, $7}}' {input.bedpe} | sort -k1,1 -k2,2n | bedtools genomecov -i stdin -g {input.chrsizes} -bga | sort -k1,1 -k2,2n > {output}) &> {log}
         """
 
-# rule total_coverage:
+rule whole_fragment_coverage:
+    input:
+        bam = lambda wildcards: "alignment/{sample}-" + config["combinedgenome"]["experimental_prefix"] + "only.bam" if wildcards.counttype="counts" else "alignment/{sample}-" + config["combinedgenome"]["spikein_prefix"] + "only.bam",
+    output:
+        "coverage/{counttype}/{sample}-mnase-wholefrag-{counttype}.bedgraph"
+    log : "logs/total_coverage/total_coverage-{sample}-{counttype}.log"
+    shell: """
+        (bedtools genomecov -ibam {input.bam} -bga -pc | sort -k1,1 -k2,2n > {output}) &> {log}
+        """
+
+rule normalize:
+    input:
+        coverage = "coverage/counts/{sample}-mnase-{readtype}-counts.bedgraph",
+        fragcounts = lambda wildcards: "coverage/counts/" + wildcards.sample + "-mnase-midpoint-counts.bedgraph" if wildcards.norm=="libsizenorm" else "coverage/sicounts/" + wildcards.sample + "-mnase-midpoint-sicounts.bedgraph"
+    output:
+        "coverage/{norm}/{sample}-mnase-{readtype}-{norm}.bedgraph"
+    params:
+        scalefactor = lambda wildcards: config["spikein-pct"] if wildcards.norm=="spikenorm" else 1
+    log: "logs/normalize/normalize-{sample}-{norm}-{readtype}.log"
+    shell: """
+        (bash scripts/libsizenorm.sh {input.fragcounts} {input.coverage} {params.scalefactor} > {output}) &> {log}
+        """
+
+# rule smoothed_midpoint_coverage:
 #     input:
-#         bam = "alignment/{sample}.bam",
-#         chrsizes = config["genome"]["chrsizes"]
+#         "coverage/bw/{sample}-mnase-midpoint-CPM.bw"
 #     output:
-#         "coverage/{sample}-mnase-total-counts.bedgraph"
-#     log : "logs/total_coverage/total_coverage-{sample}.log"
+#         "coverage/bw/{sample}-mnase-midpoint-CPM-smoothed.bw"
+#     params:
+#         bandwidth = config["smooth_bandwidth"]
+#     log: "logs/smoothed_midpoint_coverage/smooth_midpoint_coverage-{sample}.log"
 #     shell: """
-#         (bedtools genomecov -ibam {input.bam} -g {input.chrsizes} -bga -pc | sortBed -i stdin > {output}) &> {log}
+#         (python scripts/smooth_midpoint_coverage.py -b {params.bandwidth} -i {input} -o {output}) &> {log}
 #         """
 
-
-# rule samtools_index:
-#     input:
-#         "alignment/{sample}.bam"
-#     output:
-#         "alignment/{sample}.bam.bai"
-#     log:
-#         "logs/samtools_index/samtools_index-{sample}.log"
-#     shell: """
-#         (samtools index -b {input}) &> {log}
-#         """
 
 # rule build_nucwave_input:
 #     input:
@@ -290,96 +322,6 @@ rule midpoint_coverage:
 #     script:
 #         "scripts/plotfragsizedist.R"
 
-# rule get_perbase_depth:
-#     input:
-#         bam = "alignment/{sample}.bam",
-#         chrsizes = config["genome"]["chrsizes"]
-#     output:
-#         temp("qual_ctrl/.{sample}-depth.tsv")
-#     log: "logs/get_perbase_depth/perbase_depth-{sample}.log"
-#     shell: """
-#         (bedtools genomecov -ibam {input.bam} -g {input.chrsizes} -d -pc | awk -v sample={wildcards.sample} 'BEGIN{{FS=OFS="\t"; srand()}} !/^$/ {{if (rand()<= .08) print sample, $3}}' > {output}) &> {log}
-#         """
-
-# rule cat_perbase_depth:
-#     input:
-#         expand("qual_ctrl/.{sample}-depth.tsv", sample=SAMPLES)
-#     output:
-#         "qual_ctrl/perbasedepth.tsv.gz"
-#     shell: """
-#         cat {input} | gzip -f > {output}
-#         """
-
-# rule plot_depth:
-#     input:
-#         "qual_ctrl/perbasedepth.tsv.gz"
-#     output:
-#         "qual_ctrl/seq-depth-dist.svg"
-#     script:
-#         "scripts/plotCoverage.R"
-
-# rule seq_depth_norm:
-#     input:
-#         midpoint = "coverage/{sample}-mnase-midpoint-counts.bedgraph",
-#         total = "coverage/{sample}-mnase-total-counts.bedgraph",
-#         nfrags = "qual_ctrl/fragment_counts.txt"
-#     output:
-#         midpoint = "coverage/{sample}-mnase-midpoint-CPM.bedgraph",
-#         total = "coverage/{sample}-mnase-total-CPM.bedgraph"
-#     log : "logs/seq_depth_norm/depthnorm-{sample}.log"
-#     shell: """
-#         norm=$(grep /{wildcards.sample} {input.nfrags} | awk '{{print $1}}')
-#         (awk -v anorm=$norm 'BEGIN{{FS=OFS="\t"}}{{print $1, $2, $3, $4*1000000/anorm}}' {input.midpoint} > {output.midpoint}) &>> {log}
-#         (awk -v anorm=$norm 'BEGIN{{FS=OFS="\t"}}{{print $1, $2, $3, $4*1000000/anorm}}' {input.total} > {output.total}) &>> {log}
-#         """
-
-# rule make_window_file:
-#     input:
-#         chrsizes = config["genome"]["chrsizes"]
-#     output:
-#         temp("genome/windows.bed")
-#     params:
-#         wsize = config["corr-binsize"]
-#     log: "logs/bedtools_make_window_file.log"
-#     shell: """
-#         (bedtools makewindows -g {input.chrsizes} -w {params.wsize} | sortBed -i stdin > {output}) &> {log}
-#         """
-
-# rule map_to_windows:
-#     input:
-#         bed = "genome/windows.bed",
-#         bedgraph = "coverage/{sample}-midpoint-CPM.bedgraph"
-#     output:
-#         temp("coverage/.{sample}-maptowindow.tsv")
-#     log : "logs/bedtools_map_to_windows/bedtools_map-{sample}.log"
-#     shell: """
-#         (bedtools map -c 4 -o sum -a {input.bed} -b {input.bedgraph} | cut -f4 > {output}) &> {log}
-#         """
-
-# rule cat_windows:
-#     input:
-#         values = expand("coverage/.{sample}-maptowindow.tsv", sample=SAMPLES),
-#         coord = "genome/windows.bed"
-#     output:
-#         "correlations/midpoint-CPM-windows.tsv"
-#     params:
-#         labels = list(SAMPLES.keys()),
-#     shell: """
-#         echo -e "chr\tstart\tend\t{params.labels}\n$(paste {input.coord} {input.values})" > {output}
-#         """
-
-# rule plot_correlations:
-#     input:
-#         "correlations/midpoint-CPM-windows.tsv"
-#     output:
-#         scatter = "correlations/pairwise-scatterplots.svg",
-#         dists_cluster = "correlations/sample-dists-clustered.svg",
-#         dists_nocluster = "correlations/sample-dists-unclustered.svg",
-#         pca = "correlations/pca.svg",
-#         scree = "correlations/pca-scree.svg"
-#     script:
-#         "scripts/plotcorrelations.R"
-
 # rule make_bigwig_for_deeptools:
 #     input:
 #         bg = "coverage/{sample}-mnase-midpoint-CPM.bedgraph",
@@ -389,18 +331,6 @@ rule midpoint_coverage:
 #     log: "logs/make_bigwig_for_deeptools/make_bw-{sample}.log"
 #     shell: """
 #         (bedGraphToBigWig {input.bg} {input.chrsizes} {output}) &> {log}
-#         """
-
-# rule smoothed_midpoint_coverage:
-#     input:
-#         "coverage/bw/{sample}-mnase-midpoint-CPM.bw"
-#     output:
-#         "coverage/bw/{sample}-mnase-midpoint-CPM-smoothed.bw"
-#     params:
-#         bandwidth = config["smooth_bandwidth"]
-#     log: "logs/smoothed_midpoint_coverage/smooth_midpoint_coverage-{sample}.log"
-#     shell: """
-#         (python scripts/smooth_midpoint_coverage.py -b {params.bandwidth} -i {input} -o {output}) &> {log}
 #         """
 
 # rule deeptools_matrix:
