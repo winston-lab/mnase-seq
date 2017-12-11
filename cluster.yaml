@@ -18,7 +18,8 @@ demultiplex:
 
 cutadapt:
     time : 120
-    mem : 1000 
+    n : 2
+    mem : 4000 
 
 fastqc_cleaned:
     time : 60

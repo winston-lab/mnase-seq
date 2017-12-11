@@ -71,7 +71,8 @@ rule fastqc_raw:
         """
 
 #cutadapt doesn't demultiplex paired end, so we use a different script
-#TODO: check this works for barcodes of different lengths
+#NOTE: as of v1.15, cutadapt now demultiplexes paired end, could try it out
+# this would allow us to throw out reads where adapter isn't found in both reads
 rule demultiplex:
     input:
         r1 = config["fastq"]["r1"],
@@ -94,6 +95,7 @@ rule demultiplex:
 #        - ideally, we would use --nextseq-trim for 2-color quality trimming instead of -q
 #            - however, --nextseq-trim currently doesn't trim read 2
 #    note: the minimum length requirement (trimmed read >= 5nt) is to sanitize the output for bowtie 1
+# NOTE: reads without adapter are currently not filtered out. (--discard-untrimmed doesn't work since read 1 will never have the adapter). We could get around this with max size of (read length-adapter length). Alternatively, cutadapt 1.15 supports demultiplexing with paired end, but this is likely to be slow (multi-core cutadapt with demultiplexing not yet supported). 
 rule cutadapt:
     input:
         r1 = "fastq/{sample}.r1.fastq.gz",
@@ -103,11 +105,13 @@ rule cutadapt:
         r2 = "fastq/cleaned/{sample}-clean.r2.fastq.gz"
     params:
         qual_cutoff = config["cutadapt"]["qual_cutoff"],
-        adapter = lambda wildcards : SAMPLES[wildcards.sample]["barcode"]+"A"
+        adapter = lambda wildcards : SAMPLES[wildcards.sample]["barcode"]+"T",
+        max_len = lambda wildcards: config["read-length"] - len(SAMPLES[wildcards.sample]["barcode"]+"T")
+    threads: config["threads"]
     log:
         "logs/cutadapt/cutadapt-{sample}.log"
     shell: """
-        (cutadapt -u 1 -G ^{params.adapter} -q {params.qual_cutoff} --discard-untrimmed --minimum-length 5 -o {output.r1} -p {output.r2} {input.r1} {input.r2}) &> {log}
+        (cutadapt -e 0.15 -u 1 -G ^{params.adapter} -q {params.qual_cutoff} --minimum-length 5 --maximum-length {params.max_len} -j {threads} -o {output.r1} -p {output.r2} {input.r1} {input.r2}) &> {log}
         """
 
 #fastQC on demultiplexed and cleaned reads
@@ -181,6 +185,7 @@ rule gzip_loose_fastq:
         pigz -f {input.unaligned_r2}
         """
 
+#TODO: separate by species?
 rule get_fragments:
     input:
         bam = "alignment/{sample}.bam"
