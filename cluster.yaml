@@ -8,39 +8,38 @@ __default__ :
     err : "logs/cluster/{rule}.{wildcards}.err"
 
 fastqc_raw:
-    time : 60
+    time : 75
     n : 1
-    mem : 2000
+    mem : 6000
 
 demultiplex:
-    time : 360
-    mem : 4000
+    time : 180 
+    mem : 6000
 
 cutadapt:
     time : 120
     mem : 1000 
 
-fastqc_processed:
+fastqc_cleaned:
     time : 60
     mem : 4000
 
 bowtie:
-    time : 240
+    time : 60 
     n : 4
-    mem : 8000
+    mem : 2000
 
 gzip_loose_fastq:
-    time : 120
-    n : 1
+    time : 60 
+    n : 2
+
+get_fragments:
+    time : 90 
+    mem : 4000
 
 nucwave:
     time : 120
     mem : 3000
-
-get_fragments:
-    time : 120
-    n : 4
-    mem : 4000
 
 plot_fragsizes:
     time : 60

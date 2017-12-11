@@ -40,12 +40,13 @@ rule all:
     input:
         #fastqc
         "qual_ctrl/fastqc/raw",
-        # expand("qual_ctrl/fastqc/{sample}/{sample}-clean.{read}_fastqc.html", sample=SAMPLES, read=["r1","r2"]),
+        expand("qual_ctrl/fastqc/{sample}/{sample}-clean.{read}_fastqc.html", sample=SAMPLES, read=["r1","r2"]),
         #demultiplex
         expand("fastq/{sample}.{read}.fastq.gz", sample=SAMPLES, read=["r1","r2"]),
         #alignment
-        # expand("alignment/{sample}.bam", sample=SAMPLES),
-        # expand("alignment/unaligned-{sample}_{r}.fastq.gz", sample=SAMPLES, r=[1,2])
+        expand("alignment/{sample}.bam", sample=SAMPLES),
+        # expand("alignment/unaligned-{sample}_{r}.fastq.gz", sample=SAMPLES, r=[1,2]),
+        # expand("alignment/fragments/{sample}-fragments.bedpe", sample=SAMPLES)
 
 rule make_barcode_file:
     output:
@@ -102,15 +103,15 @@ rule cutadapt:
         r2 = "fastq/cleaned/{sample}-clean.r2.fastq.gz"
     params:
         qual_cutoff = config["cutadapt"]["qual_cutoff"],
-        adapter = lambda wildcards : SAMPLES[wildcards.sample]["barcode"]+"T"
+        adapter = lambda wildcards : SAMPLES[wildcards.sample]["barcode"]+"A"
     log:
         "logs/cutadapt/cutadapt-{sample}.log"
     shell: """
-        (cutadapt -u 1 -G ^{params.adapter} -q {params.qual_cutoff} --minimum-length 5 -o {output.r1} -p {output.r2} {input.r1} {input.r2}) &> {log}
+        (cutadapt -u 1 -G ^{params.adapter} -q {params.qual_cutoff} --discard-untrimmed --minimum-length 5 -o {output.r1} -p {output.r2} {input.r1} {input.r2}) &> {log}
         """
 
 #fastQC on demultiplexed and cleaned reads
-rule fastqc_processed:
+rule fastqc_cleaned:
     input:
         r1 = "fastq/cleaned/{sample}-clean.r1.fastq.gz",
         r2 = "fastq/cleaned/{sample}-clean.r2.fastq.gz"
@@ -118,15 +119,15 @@ rule fastqc_processed:
         "qual_ctrl/fastqc/{sample}/{sample}-clean.r1_fastqc.html",
         "qual_ctrl/fastqc/{sample}/{sample}-clean.r2_fastqc.html"
     threads : config["threads"]
-    log : "logs/fastqc/fastqc-trim-{sample}.log"
+    log : "logs/fastqc/fastqc-cleaned-{sample}.log"
     shell: """
-        mkdir -p {output}
-        (fastqc -o qual_ctrl/trim-{wildcards.sample} --noextract -t {threads} {input.r1} {input.r2}) &> {log}
+        (mkdir -p qual_ctrl/fastqc/{wildcards.sample}) &> {log}
+        (fastqc -o qual_ctrl/fastqc/{wildcards.sample} --noextract -t {threads} {input.r1} {input.r2}) &>> {log}
         """
 
 rule bowtie_build:
     input:
-        fasta = config["genome"]["fasta"]
+        fasta = config["combinedgenome"]["fasta"] if sisamples else config["genome"]["fasta"]
     output:
         expand(config["bowtie"]["index-path"] + "/{{basename}}.{num}.ebwt", num=[1,2,3,4]),
         expand(config["bowtie"]["index-path"] + "/{{basename}}.rev.{num}.ebwt", num=[1,2]),
@@ -134,7 +135,7 @@ rule bowtie_build:
         idx_path = config["bowtie"]["index-path"],
         prefix = config["combinedgenome"]["experimental_prefix"]
     log:
-        "logs/bowtie/bowtie-build.log"
+        "logs/bowtie-build.log"
     run:
         if sisamples:
             shell("(bowtie-build {input.fasta} {params.idx_path}/{wildcards.basename}) &> {log}")
@@ -146,7 +147,7 @@ rule bowtie_build:
 rule bowtie:
     input:
         expand(config["bowtie"]["index-path"] + "/" + config["combinedgenome"]["name"] + ".{num}.ebwt", num=[1,2,3,4]) if sisamples else expand(config["bowtie"]["index-path"] + "/" + config["genome"]["name"] + ".{num}.ebwt", num=[1,2,3,4]),
-        expand(config["bowtie"]["index-path"] + "/" + config["combinedgenome"]["name"] + "rev.{num}.ebwt", num=[1,2]) if sisamples else expand(config["bowtie"]["index-path"] + "/" + config["genome"]["name"] + "rev.{num}.ebwt", num=[1,2]),
+        expand(config["bowtie"]["index-path"] + "/" + config["combinedgenome"]["name"] + ".rev.{num}.ebwt", num=[1,2]) if sisamples else expand(config["bowtie"]["index-path"] + "/" + config["genome"]["name"] + ".rev.{num}.ebwt", num=[1,2]),
         r1 = "fastq/cleaned/{sample}-clean.r1.fastq.gz",
         r2 = "fastq/cleaned/{sample}-clean.r2.fastq.gz"
     params:
@@ -163,7 +164,7 @@ rule bowtie:
     log:
        "logs/bowtie/bowtie-align-{sample}.log"
     shell: """
-        (bowtie -v {params.max_mismatch} -I {params.min_ins} -X {params.max_ins} --fr --nomaqround --best -S -p {threads} --un alignment/unaligned-{wildcards.sample}.fastq {params.idx_path}/{params.basename} -1 {input.r1} -2 {input.r2} | samtools view -buh -f 0x2 - | samtools sort -T {wildcards.sample} -@ {threads} -o {output.bam} -) &> {log}
+        (bowtie -v {params.max_mismatch} -I {params.min_ins} -X {params.max_ins} --fr --nomaqround --best -S -p {threads} --un alignment/unaligned-{wildcards.sample}.fastq {params.idx_path}/{params.basename} -1 {input.r1} -2 {input.r2} | samtools view -buh -f 0x2 - | samtools sort -T .{wildcards.sample} -@ {threads} -o {output.bam} -) &> {log}
         """
 
 rule gzip_loose_fastq:
@@ -180,28 +181,29 @@ rule gzip_loose_fastq:
         pigz -f {input.unaligned_r2}
         """
 
-# rule get_fragments:
-#     input:
-#         bam = "alignment/{sample}.bam"
-#     output:
-#         "alignment/fragments/{sample}-fragments.bedpe"
-#     threads: config["threads"]
-#     log : "logs/get_fragments/get_fragments-{sample}.log"
-#     shell: """
-#         (bedtools bamtobed -bedpe -i {input.bam} > {output}) &> {log}
-#         """
-#         # (samtools sort -n -@ {threads} {input.bam} | bedtools bamtobed -bedpe -i stdin > {output}) &> {log}
+rule get_fragments:
+    input:
+        bam = "alignment/{sample}.bam"
+    output:
+        "alignment/fragments/{sample}-fragments.bedpe"
+    threads: config["threads"]
+    log : "logs/get_fragments/get_fragments-{sample}.log"
+    shell: """
+        (bedtools bamtobed -bedpe -i {input.bam} > {output}) &> {log}
+        """
 
-# rule midpoint_coverage:
-#     input:
-#         bedpe = "alignment/fragments/{sample}-fragments.bedpe",
-#         chrsizes = config["genome"]["chrsizes"]
-#     output:
-#         "coverage/{sample}-mnase-midpoint-counts.bedgraph"
-#     log: "logs/midpoint_coverage/midpoint_coverage-{sample}.log"
-#     shell: """
-#         (awk 'BEGIN{{FS=OFS="\t"}} width=$6-$2 {{if(width % 2 != 0){{width -= 1}}; mid=$2+width/2; print $1, mid, mid+1, $7}}' {input.bedpe} | sort -k1,1 -k2,2n | bedtools genomecov -i stdin -g {input.chrsizes} -bga | sortBed -i stdin > {output}) &> {log}
-#         """
+rule midpoint_coverage:
+    input:
+        bedpe = "alignment/fragments/{sample}-fragments.bedpe",
+        chrsizes = config["genome"]["chrsizes"]
+    params:
+        prefix = lambda wildcards: config["combinedgenome"]["experimental_prefix"] if wildcards.counttype=="counts" else config["combinedgenome"]["spikein_prefix"]
+    output:
+        "coverage/{counttype}/{sample}-mnase-midpoint-{counttype}.bedgraph"
+    log: "logs/midpoint_coverage/midpoint_coverage-{sample}-{counttype}.log"
+    shell: """
+        (awk 'BEGIN{{FS=OFS="\t"}} width=$6-$2 {{if(width % 2 != 0){{width -= 1}}; mid=$2+width/2; print $1, mid, mid+1, $7}}' {input.bedpe} | sort -k1,1 -k2,2n | bedtools genomecov -i stdin -g {input.chrsizes} -bga | sort -k1,1 -k2,2n > {output}) &> {log}
+        """
 
 # rule total_coverage:
 #     input:
