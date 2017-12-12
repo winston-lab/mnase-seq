@@ -3,14 +3,14 @@ library(tidyverse)
 library(forcats)
 library(viridis)
 
-main = function(in.table, upstream, dnstream, cutoffpct, trimpct, ylab, refptlab, heatmap.cmap,
+main = function(in.table, samplelist, upstream, dnstream, cutoffpct, trimpct, ylab, refptlab, heatmap.cmap,
                 meta.pal, avghmap.cmap, out.hmapsample, out.hmapgroup, out.metasample, out.metaoverlaysample,
                 out.metaoverlayallsample, out.metagroup, out.metaoverlaygroup, out.metahmapsample, out.metahmapgroup){
     raw = read_tsv(in.table,
                    col_names=c("group","sample","index","position","cpm"),
                    col_types=cols(group=col_character(), sample=col_character(),
                                   index=col_integer(), position=col_double(),
-                                  cpm=col_double()))
+                                  cpm=col_double())) %>% filter(sample %in% samplelist)
     raw$sample = fct_inorder(raw$sample, ordered = TRUE)
     raw$group = fct_inorder(raw$group, ordered = TRUE)
     
@@ -66,14 +66,17 @@ main = function(in.table, upstream, dnstream, cutoffpct, trimpct, ylab, refptlab
     
     #plot metagene and average heatmaps
     metadf.sample = raw %>% group_by(sample, position) %>%
-        summarise(group = unique(group), mean = mean(cpm), sd = sd(cpm), trim.mean = mean(cpm, trim=trimpct),
-                  win.mean = winsor.mean(cpm, trim=trimpct), win.sd = winsor.sd(cpm, trim=trimpct))
+        summarise(group = unique(group), mean = mean(cpm), sd = sd(cpm),
+                  sem=sd(cpm)/sqrt(n()), trim.mean = mean(cpm, trim=trimpct),
+                  win.mean = winsor.mean(cpm, trim=trimpct),
+                  win.sd = winsor.sd(cpm, trim=trimpct),
+                  win.sem = winsor.sd(cpm, trim=trimpct)/sqrt(n()))
     
     meta.width = max(10, 2+(upstream+dnstream)/200)
     
     metaplot.sample= ggplot(data = metadf.sample,
                             aes(x=position, y=win.mean,
-                                ymin=win.mean-win.sd, ymax=win.mean+win.sd,
+                                ymin=win.mean-1.96*win.sem, ymax=win.mean+1.96*win.sem,
                                 color=group, fill=group)) +
                         geom_vline(xintercept=0, size=1) +
                         geom_ribbon(alpha=0.2, size=0) +
@@ -84,13 +87,14 @@ main = function(in.table, upstream, dnstream, cutoffpct, trimpct, ylab, refptlab
                         scale_fill_brewer(palette = meta.pal, guide=FALSE, direction=-1) +
                         scale_color_brewer(palette = meta.pal, guide=FALSE, direction=-1) +
                         facet_grid(sample~., switch="y") +
-                        theme_minimal() +
+                        theme_light() +
                         theme(text = element_text(size=12, face="bold", color="black"),
                               axis.text.y = element_text(size=10, face="plain", color="black"),
                               axis.text.x = element_text(size=12, face="bold", color="black"),
                               strip.text.y = element_text(size=12, face="bold", color="black", angle=180, hjust=1),
-                              panel.grid.major = element_line(color="grey85"),
-                              panel.grid.minor = element_line(color="grey95"))
+                              strip.background = element_blank(),
+                              panel.grid.major = element_line(color="grey60"),
+                              panel.grid.minor = element_line(color="grey60"))
     
     ggsave(out.metasample, plot = metaplot.sample, height = 2*nsamples, width = meta.width, units = "cm")
     rm(metaplot.sample)
@@ -98,55 +102,62 @@ main = function(in.table, upstream, dnstream, cutoffpct, trimpct, ylab, refptlab
     
     metaoverlay.sample= ggplot(data = metadf.sample,
                             aes(x=position, y=win.mean,
-                                ymin=win.mean-win.sd, ymax=win.mean+win.sd,
+                                ymin=win.mean-1.96*win.sem, ymax=win.mean+1.96*win.sem,
                                 group=sample, color=group, fill=group)) +
                         geom_vline(xintercept=0, size=1) +
-                        #geom_ribbon(alpha=0.05, size=0) +
-                        geom_line(size=1, alpha=0.5) +
+                        geom_ribbon(alpha=0.6, size=0) +
+                        geom_line(size=1, alpha=0.9) +
                         scale_y_continuous(position="right", name=NULL) +
                         scale_x_continuous(name=paste("position relative to",
                                                       refptlab, "(kb)")) +
                         scale_fill_brewer(palette = meta.pal, guide=FALSE, direction=-1) +
                         scale_color_brewer(palette = meta.pal, guide=FALSE, direction=-1) +
-                        theme_minimal() +
+                        theme_light() +
                         facet_grid(group~., switch="y") +
                         theme(text = element_text(size=12, face="bold", color="black"),
                               axis.text.y = element_text(size=10, face="plain", color="black"),
                               axis.text.x = element_text(size=12, face="bold", color="black"),
                               strip.text.y = element_text(size=12, face="bold", color="black", angle=180, hjust=1),
-                              panel.grid.major = element_line(color="grey85"),
-                              panel.grid.minor = element_line(color="grey95"))
+                              strip.background= element_blank(),
+                              panel.grid.major = element_line(color="grey60"),
+                              panel.grid.minor = element_line(color="grey60"))
     
     ggsave(out.metaoverlaysample, plot = metaoverlay.sample, height = 3*ngroups, width = meta.width, units = "cm")
     
     metaoverlay.allsample= ggplot(data = metadf.sample,
                             aes(x=position, y=win.mean,
+                                ymin=win.mean-1.96*win.sem, ymax=win.mean+1.96*win.sem,
                                 group=sample, color=group, fill=group)) +
                         geom_vline(xintercept=0, size=1) +
-                        geom_line(size=1, alpha=0.5) +
+                        geom_ribbon(alpha=0.6, size=0) +
+                        geom_line(size=1, alpha=0.9) +
                         scale_y_continuous(name="MNase-seq signal") +
                         scale_x_continuous(name=paste("position relative to",
                                                       refptlab, "(kb)")) +
                         scale_fill_brewer(palette = meta.pal, guide=FALSE, direction=-1) +
                         scale_color_brewer(palette = meta.pal, guide=guide_legend(), direction=-1) +
-                        theme_minimal() +
+                        theme_light() +
                         theme(text = element_text(size=12, face="bold", color="black"),
                               axis.text.y = element_text(size=10, face="plain", color="black"),
                               axis.text.x = element_text(size=12, face="bold", color="black"),
-                              panel.grid.major = element_line(color="grey85"),
-                              panel.grid.minor = element_line(color="grey95"),
+                              panel.grid.major = element_line(color="grey60"),
+                              panel.grid.minor = element_line(color="grey60"),
                               legend.title = element_blank(),
                               legend.text = element_text(size=12, face="bold", color="black"),
                               legend.position="top")
+    
     ggsave(out.metaoverlayallsample, plot = metaoverlay.allsample, height=7, width = meta.width, units = "cm")
     
     metadf.group = raw %>% group_by(group, position) %>% 
-        summarise(mean = mean(cpm), sd = sd(cpm), trim.mean = mean(cpm, trim=trimpct),
-                  win.mean = winsor.mean(cpm, trim=trimpct), win.sd = winsor.sd(cpm, trim=trimpct))
+        summarise(mean = mean(cpm), sd = sd(cpm), sem=sd(cpm)/sqrt(n()),
+                  trim.mean = mean(cpm, trim=trimpct),
+                  win.mean = winsor.mean(cpm, trim=trimpct),
+                  win.sd = winsor.sd(cpm, trim=trimpct),
+                  win.sem = winsor.sd(cpm, trim=trimpct)/sqrt(n()))
     
     metaplot.group = ggplot(data = metadf.group,
                             aes(x=position, y=win.mean,
-                                ymin=win.mean-win.sd, ymax=win.mean+win.sd,
+                                ymin=win.mean-1.96*win.sem, ymax=win.mean+1.96*win.sem,
                                 color=group, fill=group)) +
                         geom_vline(xintercept=0, size=1) +
                         geom_ribbon(alpha=0.2, size=0) +
@@ -158,36 +169,38 @@ main = function(in.table, upstream, dnstream, cutoffpct, trimpct, ylab, refptlab
                         scale_fill_brewer(palette = meta.pal, guide=FALSE, direction=-1) +
                         scale_color_brewer(palette = meta.pal, guide=FALSE, direction=-1) +
                         facet_grid(group~., switch="y") +
-                        theme_minimal() +
+                        theme_light() +
                         theme(text = element_text(size=12, face="bold", color="black"),
                               axis.text.y = element_text(size=10, face="plain", color="black"),
                               axis.text.x = element_text(size=12, face="bold", color="black"),
-                              strip.text.y = element_text(angle=180, hjust=1),
-                              panel.grid.major = element_line(color="grey85"),
-                              panel.grid.minor = element_line(color="grey95"))
+                              strip.text.y = element_text(angle=180, hjust=1, color="black", size=12),
+                              strip.background = element_blank(),
+                              panel.grid.major = element_line(color="grey60"),
+                              panel.grid.minor = element_line(color="grey60"))
     
     ggsave(out.metagroup, plot = metaplot.group, height = 3*ngroups, width = meta.width, units = "cm")
     rm(metaplot.group)
     gc()
+    
     metaoverlay.group = ggplot(data = metadf.group,
                             aes(x=position, y=win.mean,
-                        #        ymin=win.mean-win.sd, ymax=win.mean+win.sd,
+                                ymin=win.mean-1.96*win.sem, ymax=win.mean+1.96*win.sem,
                                 color=group, fill=group)) +
                         geom_vline(xintercept=0, size=1) +
-                        #geom_ribbon(alpha=0.1, size=0) +
-                        geom_line(alpha=0.8, size=1) +
+                        geom_ribbon(alpha=0.6, size=0) +
+                        geom_line(alpha=0.9, size=1) +
                         scale_y_continuous(name="MNase-seq signal") +
                         scale_x_continuous(name=paste("position relative to",
                                                       refptlab, "(kb)")) +
                         scale_fill_brewer(palette = meta.pal, direction=-1) +
                         scale_color_brewer(palette = meta.pal, direction=-1) +
-                        theme_minimal() +
+                        theme_light() +
                         theme(text = element_text(size=12, face="bold", color="black"),
                               axis.text.y = element_text(size=10, face="plain", color="black"),
                               axis.text.x = element_text(size=12, face="bold", color="black"),
                               strip.text.y = element_text(angle=180, hjust=1),
-                              panel.grid.major = element_line(color="grey85"),
-                              panel.grid.minor = element_line(color="grey95"),
+                              panel.grid.major = element_line(color="grey60"),
+                              panel.grid.minor = element_line(color="grey60"),
                               legend.title = element_blank(),
                               legend.position = "top",
                               legend.text = element_text(size=12, face="bold", color="black"))
@@ -238,6 +251,7 @@ main = function(in.table, upstream, dnstream, cutoffpct, trimpct, ylab, refptlab
 
 main(
     in.table = snakemake@input[["matrix"]],
+    samplelist = snakemake@params[["samplelist"]],
     upstream = snakemake@params[["upstream"]],
     dnstream = snakemake@params[["dnstream"]],
     cutoffpct = snakemake@params[["pct_cutoff"]],

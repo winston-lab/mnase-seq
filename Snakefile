@@ -44,7 +44,20 @@ rule all:
         expand("coverage/{counttype}/{sample}-mnase-midpoint-{counttype}.bedgraph", sample=SAMPLES, counttype=COUNTTYPES),
         expand("coverage/{norm}/{sample}-mnase-{readtype}-{norm}.bedgraph", norm=NORMS, sample=SAMPLES, readtype=["midpoint"]),
         #datavis
-        expand("datavis/{annotation}/{norm}/allsamples-{annotation}-{readtype}-{norm}.tsv.gz", annotation=config["annotations"], norm=NORMS, readtype=["midpoint"])
+        expand("datavis/{annotation}/{norm}/allsamples-{annotation}-{readtype}-{norm}.tsv.gz", annotation=config["annotations"], norm=NORMS, readtype=["midpoint"]),
+        expand(expand("datavis/{{annotation}}/spikenorm/mnase-{{annotation}}-spikenorm-{{status}}_{condition}-v-{control}-{{readtype}}-heatmap-bysample.svg", zip, condition=conditiongroups_si+["all"], control=controlgroups_si+["all"]), annotation=config["annotations"], readtype=["midpoint"], status=["all","passing"]) + expand(expand("datavis/{{annotation}}/libsizenorm/mnase-{{annotation}}-libsizenorm-{{status}}_{condition}-v-{control}-{{readtype}}-heatmap-bysample.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), annotation=config["annotations"], readtype=["midpoint"], status=["all","passing"]) if sisamples else expand(expand("datavis/{{annotation}}/libsizenorm/mnase-{{annotation}}-libsizenorm-{{status}}_{condition}-v-{control}-{{readtype}}-heatmap-bysample.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), annotation=config["annotations"], readtype=["midpoint"], status=["all","passing"])
+
+def plotcorrsamples(wildcards):
+    dd = SAMPLES if wildcards.status=="all" else PASSING
+    if wildcards.condition=="all":
+        if wildcards.norm=="libsizenorm": #condition==all,norm==lib
+            return list(dd.keys())
+        else: #condition==all,norm==spike
+            return [k for k,v in dd.items() if v["spikein"]=="y"]
+    elif wildcards.norm=="libsizenorm": #condition!=all;norm==lib
+        return [k for k,v in dd.items() if v["group"]==wildcards.control or v["group"]==wildcards.condition]
+    else: #condition!=all;norm==spike
+        return [k for k,v in dd.items() if (v["group"]==wildcards.control or v["group"]==wildcards.condition) and v["spikein"]=="y"]
 
 rule make_barcode_file:
     output:
@@ -332,32 +345,33 @@ rule cat_matrices:
         (cat {input} > {output}) &> {log}
         """
 
-
-#rule r_datavis:
-#     input:
-#         matrix = "datavis/{annotation}/allsamples-{annotation}.tsv.gz"
-#     output:
-#         heatmap_sample = "datavis/{annotation}/mnase-{annotation}-heatmap-bysample.svg",
-#         heatmap_group = "datavis/{annotation}/mnase-{annotation}-heatmap-bygroup.svg",
-#         metagene_sample = "datavis/{annotation}/mnase-{annotation}-metagene-bysample.svg",
-#         metagene_sample_overlay = "datavis/{annotation}/mnase-{annotation}-metagene-sampleolaybygroup.svg",
-#         metagene_sample_overlay_all = "datavis/{annotation}/mnase-{annotation}-metagene-sampleolayall.svg",
-#         metagene_group = "datavis/{annotation}/mnase-{annotation}-metagene-bygroup.svg",
-#         metagene_overlay = "datavis/{annotation}/mnase-{annotation}-metagene-groupolay.svg",
-#         metaheatmap_sample = "datavis/{annotation}/mnase-{annotation}-metaheatmap-bysample.svg",
-#         metaheatmap_group = "datavis/{annotation}/mnase-{annotation}-metaheatmap-bygroup.svg"
-#     params:
-#         upstream = lambda wildcards : config["annotations"][wildcards.annotation]["upstream"],
-#         dnstream = lambda wildcards : config["annotations"][wildcards.annotation]["dnstream"],
-#         pct_cutoff = lambda wildcards : config["annotations"][wildcards.annotation]["pct_cutoff"],
-#         trim_pct = lambda wildcards : config["annotations"][wildcards.annotation]["trim_pct"],
-#         heatmap_cmap = lambda wildcards : config["annotations"][wildcards.annotation]["heatmap_colormap"],
-#         metagene_palette = lambda wildcards : config["annotations"][wildcards.annotation]["metagene_palette"],
-#         avg_heatmap_cmap = lambda wildcards : config["annotations"][wildcards.annotation]["avg_heatmap_cmap"],
-#         refpointlabel = lambda wildcards : config["annotations"][wildcards.annotation]["refpointlabel"],
-#         ylabel = lambda wildcards : config["annotations"][wildcards.annotation]["ylabel"]
-#     script:
-#         "scripts/plotHeatmapsMeta.R"
+#TODO: add clustering
+rule r_datavis:
+    input:
+        matrix = "datavis/{annotation}/{norm}/allsamples-{annotation}-{readtype}-{norm}.tsv.gz"
+    output:
+        heatmap_sample = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}-{readtype}-heatmap-bysample.svg",
+        heatmap_group = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}-{readtype}-heatmap-bygroup.svg",
+        metagene_sample = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}-{readtype}-metagene-bysample.svg",
+        metagene_sample_overlay = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}-{readtype}-metagene-sampleoverlaybygroup.svg",
+        metagene_sample_overlay_all = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}-{readtype}-metagene-sampleoverlayall.svg",
+        metagene_group = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}-{readtype}-metagene-bygroup.svg",
+        metagene_overlay = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}-{readtype}-metagene-groupoverlay.svg",
+        metaheatmap_sample = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}-{readtype}-metaheatmap-bysample.svg",
+        metaheatmap_group = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}-{readtype}-metaheatmap-bygroup.svg"
+    params:
+        samplelist = plotcorrsamples,
+        upstream = lambda wildcards : config["annotations"][wildcards.annotation]["upstream"],
+        dnstream = lambda wildcards : config["annotations"][wildcards.annotation]["dnstream"],
+        pct_cutoff = lambda wildcards : config["annotations"][wildcards.annotation]["pct_cutoff"],
+        trim_pct = lambda wildcards : config["annotations"][wildcards.annotation]["trim_pct"],
+        heatmap_cmap = lambda wildcards : config["annotations"][wildcards.annotation]["heatmap_colormap"],
+        metagene_palette = lambda wildcards : config["annotations"][wildcards.annotation]["metagene_palette"],
+        avg_heatmap_cmap = lambda wildcards : config["annotations"][wildcards.annotation]["avg_heatmap_cmap"],
+        refpointlabel = lambda wildcards : config["annotations"][wildcards.annotation]["refpointlabel"],
+        ylabel = lambda wildcards : config["annotations"][wildcards.annotation]["ylabel"]
+    script:
+        "scripts/plotHeatmapsMeta.R"
 
 
 
