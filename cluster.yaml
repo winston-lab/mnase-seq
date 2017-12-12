@@ -34,9 +34,26 @@ gzip_loose_fastq:
     time : 60 
     n : 2
 
+bam_separate_species:
+    time: 15 
+    mem: 2000
+
 get_fragments:
-    time : 90 
+    time : 45 
+    n : 2
     mem : 4000
+
+midpoint_coverage:
+    time : 60
+    mem : 2000
+
+whole_fragment_coverage:
+    time : 60
+    mem : 2000 
+
+normalize:
+    time: 10
+    mem: 2000
 
 nucwave:
     time : 120
@@ -54,25 +71,13 @@ plot_depth:
     time : 60
     mem : 4000
 
-midpoint_coverage:
-    time : 60
-    mem : 2000
-
-total_coverage:
-    time : 60
-    mem : 2000 
-
-map_to_windows:
-    time : 60
-    mem : 4000
-
-plot_correlations:
-    time : 719
-    mem : 20000
-
 smoothed_midpoint_coverage:
     time : 120
     mem : 2000
+
+bg_to_bw:
+    time: 15
+    mem: 2000
 
 deeptools_matrix:
     time : 60
@@ -85,24 +90,19 @@ gzip_deeptools_matrix:
     mem : 2000
 
 melt_matrix:
-    time : 30
+    time : 20
     n : 1
+    mem : 2000
+
+cat_matrices:
+    time : 30
     mem : 2000
 
 r_datavis:
     time : 120
     mem : 10000
 
-cat_matrices:
-    time : 60
-    mem : 2000
-
 meta_oneoff:
     queue : "priority"
     time : 719
     mem : 60000
-
-dpos_deeptools_matrix:
-    time : 120
-    n : 1
-    mem : 2000

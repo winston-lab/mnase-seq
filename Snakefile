@@ -21,20 +21,14 @@ localrules: all,
             make_barcode_file,
             bowtie_build,
             samtools_index,
-            build_nucwave_input,
-            get_fragsizes,
-            cat_fragsizes,
-            make_fragments_table,
-            make_window_file,
-            cat_windows,
-            cat_perbase_depth,
-            seq_depth_norm,
-            make_bigwig_for_deeptools,
-            group_bam_for_danpos,
-            dpos_wig_to_bigwig,
-            dpos_gzip_deeptools_table,
-            dpos_melt_matrix,
-            dpos_cat_matrices
+            # build_nucwave_input,
+            # get_fragsizes,
+            # cat_fragsizes,
+            # make_fragments_table,
+            # make_window_file,
+            # cat_windows,
+            # cat_perbase_depth,
+            # group_bam_for_danpos,
 
 rule all:
     input:
@@ -46,7 +40,11 @@ rule all:
         #alignment
         expand("alignment/{sample}.bam", sample=SAMPLES),
         expand("alignment/unaligned-{sample}_{r}.fastq.gz", sample=SAMPLES, r=[1,2]),
-        # expand("alignment/fragments/{sample}-fragments.bedpe", sample=SAMPLES)
+        #coverage
+        expand("coverage/{counttype}/{sample}-mnase-midpoint-{counttype}.bedgraph", sample=SAMPLES, counttype=COUNTTYPES),
+        expand("coverage/{norm}/{sample}-mnase-{readtype}-{norm}.bedgraph", norm=NORMS, sample=SAMPLES, readtype=["midpoint"]),
+        #datavis
+        expand("datavis/{annotation}/{norm}/allsamples-{annotation}-{readtype}-{norm}.tsv.gz", annotation=config["annotations"], norm=NORMS, readtype=["midpoint"])
 
 rule make_barcode_file:
     output:
@@ -95,7 +93,7 @@ rule demultiplex:
 #        - ideally, we would use --nextseq-trim for 2-color quality trimming instead of -q
 #            - however, --nextseq-trim currently doesn't trim read 2
 #    note: the minimum length requirement (trimmed read >= 5nt) is to sanitize the output for bowtie 1
-# NOTE: reads without adapter are currently not filtered out. (--discard-untrimmed doesn't work since read 1 will never have the adapter). We could get around this with max size of (read length-adapter length). Alternatively, cutadapt 1.15 supports demultiplexing with paired end, but this is likely to be slow (multi-core cutadapt with demultiplexing not yet supported). 
+#    note: the maximum length requirement is discard reads in which the barcode isn't found in read 2
 rule cutadapt:
     input:
         r1 = "fastq/{sample}.r1.fastq.gz",
@@ -185,6 +183,7 @@ rule gzip_loose_fastq:
         pigz -f {input.unaligned_r2}
         """
 
+#the index is required use region arguments in samtools view to separate the species
 rule samtools_index:
     input:
         "alignment/{sample}.bam"
@@ -205,51 +204,66 @@ rule bam_separate_species:
         "alignment/{sample}-{species}only.bam"
     log: "logs/bam_separate_species/bam_separate_species-{sample}-{species}.log"
     shell: """
-        (samtools view -b {input.bam} $(grep {wildcards.species} {input.chrsizes} | awk 'BEGIN{{FS="\t"; ORS=" "}}{{print $1}}') > {output}) &> {log}
+        (samtools view -bh {input.bam} $(grep {wildcards.species} {input.chrsizes} | awk 'BEGIN{{FS="\t"; ORS=" "}}{{print $1}}') > {output}) &> {log}
         """
 
+#bam must be sorted by name for bedpe. We don't do this in the bowtie step since samtools index required position-sorted bam.
 rule get_fragments:
     input:
         bam = "alignment/{sample}-{species}only.bam"
     output:
         "alignment/fragments/{sample}-{species}fragments.bedpe"
+    threads: config["threads"]
     log : "logs/get_fragments/get_fragments-{sample}-{species}.log"
     shell: """
-        (bedtools bamtobed -bedpe -i {input.bam} | grep {wildcards.species} | sed -e 's/{wildcards.species}//g' > {output}) &> {log}
+        (samtools sort -n -T .{wildcards.sample}_{wildcards.species} -@ {threads} {input.bam} | bedtools bamtobed -bedpe -i stdin > {output}) &> {log}
         """
 
 rule midpoint_coverage:
     input:
-        bedpe = lambda wildcards: "alignment/fragments/{sample}-" + config["combinedgenome"]["experimental_prefix"] + "fragments.bedpe" if wildcards.counttype="counts" else "alignment/fragments/{sample}-" + config["combinedgenome"]["spikein_prefix"] + "fragments.bedpe",
+        bedpe = lambda wildcards: "alignment/fragments/" + wildcards.sample + "-" + config["combinedgenome"]["experimental_prefix"] + "fragments.bedpe" if wildcards.counttype=="counts" else "alignment/fragments/" + wildcards.sample + "-" + config["combinedgenome"]["spikein_prefix"] + "fragments.bedpe",
         chrsizes = lambda wildcards: config["genome"]["chrsizes"] if wildcards.counttype=="counts" else config["genome"]["sichrsizes"]
+    params:
+        prefix = lambda wildcards: config["combinedgenome"]["experimental_prefix"] if wildcards.counttype=="counts" else config["combinedgenome"]["spikein_prefix"]
     output:
-        "coverage/{counttype}/{sample}-mnase-midpoint-{counttype}.bedgraph"
+        "coverage/{counttype,counts|sicounts}/{sample}-mnase-midpoint-{counttype}.bedgraph"
     log: "logs/midpoint_coverage/midpoint_coverage-{sample}-{counttype}.log"
     shell: """
-        (awk 'BEGIN{{FS=OFS="\t"}} width=$6-$2 {{if(width % 2 != 0){{width -= 1}}; mid=$2+width/2; print $1, mid, mid+1, $7}}' {input.bedpe} | sort -k1,1 -k2,2n | bedtools genomecov -i stdin -g {input.chrsizes} -bga | sort -k1,1 -k2,2n > {output}) &> {log}
+        (awk 'BEGIN{{FS=OFS="\t"}} width=$6-$2 {{if(width % 2 != 0){{width -= 1}}; mid=$2+width/2; print $1, mid, mid+1, $7}}' {input.bedpe} | sed -e 's/{params.prefix}//g' | sort -k1,1 -k2,2n | bedtools genomecov -i stdin -g {input.chrsizes} -bga | sort -k1,1 -k2,2n > {output}) &> {log}
         """
 
-rule whole_fragment_coverage:
-    input:
-        bam = lambda wildcards: "alignment/{sample}-" + config["combinedgenome"]["experimental_prefix"] + "only.bam" if wildcards.counttype="counts" else "alignment/{sample}-" + config["combinedgenome"]["spikein_prefix"] + "only.bam",
-    output:
-        "coverage/{counttype}/{sample}-mnase-wholefrag-{counttype}.bedgraph"
-    log : "logs/total_coverage/total_coverage-{sample}-{counttype}.log"
-    shell: """
-        (bedtools genomecov -ibam {input.bam} -bga -pc | sort -k1,1 -k2,2n > {output}) &> {log}
-        """
+# rule whole_fragment_coverage:
+#     input:
+#         bam = lambda wildcards: "alignment/" + wildcards.sample + "-" + config["combinedgenome"]["experimental_prefix"] + "only.bam" if wildcards.counttype=="counts" else "alignment/" + wildcards.sample + "-" + config["combinedgenome"]["spikein_prefix"] + "only.bam",
+#     output:
+#         "coverage/{counttype}/{sample}-mnase-wholefrag-{counttype}.bedgraph"
+#     log : "logs/total_coverage/total_coverage-{sample}-{counttype}.log"
+#     shell: """
+#         (bedtools genomecov -ibam {input.bam} -bga -pc | sort -k1,1 -k2,2n > {output}) &> {log}
+#         """
 
 rule normalize:
     input:
         coverage = "coverage/counts/{sample}-mnase-{readtype}-counts.bedgraph",
         fragcounts = lambda wildcards: "coverage/counts/" + wildcards.sample + "-mnase-midpoint-counts.bedgraph" if wildcards.norm=="libsizenorm" else "coverage/sicounts/" + wildcards.sample + "-mnase-midpoint-sicounts.bedgraph"
-    output:
-        "coverage/{norm}/{sample}-mnase-{readtype}-{norm}.bedgraph"
     params:
         scalefactor = lambda wildcards: config["spikein-pct"] if wildcards.norm=="spikenorm" else 1
+    output:
+        "coverage/{norm}/{sample}-mnase-{readtype}-{norm}.bedgraph"
     log: "logs/normalize/normalize-{sample}-{norm}-{readtype}.log"
     shell: """
         (bash scripts/libsizenorm.sh {input.fragcounts} {input.coverage} {params.scalefactor} > {output}) &> {log}
+        """
+
+rule bg_to_bw:
+    input:
+        bedgraph = "coverage/{norm}/{sample}-mnase-{readtype}-{norm}.bedgraph",
+        chrsizes = lambda wildcards: config["genome"]["sichrsizes"] if wildcards.norm=="sicounts" else config["genome"]["chrsizes"]
+    output:
+        "coverage/{norm}/{sample}-mnase-{readtype}-{norm}.bw"
+    log : "logs/bg_to_bw/bg_to_bw-{sample}-{readtype}-{norm}.log"
+    shell: """
+        (bedGraphToBigWig {input.bedgraph} {input.chrsizes} {output}) &> {log}
         """
 
 # rule smoothed_midpoint_coverage:
@@ -263,6 +277,88 @@ rule normalize:
 #     shell: """
 #         (python scripts/smooth_midpoint_coverage.py -b {params.bandwidth} -i {input} -o {output}) &> {log}
 #         """
+
+rule deeptools_matrix:
+    input:
+        annotation = lambda wildcards: config["annotations"][wildcards.annotation]["path"],
+        bw = "coverage/{norm}/{sample}-mnase-{readtype}-{norm}.bw"
+    output:
+        dtfile = temp("datavis/{annotation}/{norm}/{annotation}-{sample}-{readtype}-{norm}.mat.gz"),
+        matrix = temp("datavis/{annotation}/{norm}/{annotation}-{sample}-{readtype}-{norm}.tsv")
+    params:
+        refpoint = lambda wildcards: config["annotations"][wildcards.annotation]["refpoint"],
+        upstream = lambda wildcards: config["annotations"][wildcards.annotation]["upstream"],
+        dnstream = lambda wildcards: config["annotations"][wildcards.annotation]["dnstream"],
+        binsize = lambda wildcards: config["annotations"][wildcards.annotation]["binsize"],
+        sort = lambda wildcards: config["annotations"][wildcards.annotation]["sort"],
+        sortusing = lambda wildcards: config["annotations"][wildcards.annotation]["sortby"],
+        binstat = lambda wildcards: config["annotations"][wildcards.annotation]["binstat"]
+    threads : config["threads"]
+    log: "logs/deeptools/computeMatrix-{annotation}-{sample}-{readtype}-{norm}.log"
+    run:
+        if config["annotations"][wildcards.annotation]["nan_afterend"]=="y":
+            shell("(computeMatrix reference-point -R {input.annotation} -S {input.bw} --referencePoint {params.refpoint} -out {output.dtfile} --outFileNameMatrix {output.matrix} -b {params.upstream} -a {params.dnstream} --nanAfterEnd --binSize {params.binsize} --sortRegions {params.sort} --sortUsing {params.sortusing} --averageTypeBins {params.binstat} -p {threads}) &> {log}")
+        else:
+            shell("(computeMatrix reference-point -R {input.annotation} -S {input.bw} --referencePoint {params.refpoint} -out {output.dtfile} --outFileNameMatrix {output.matrix} -b {params.upstream} -a {params.dnstream} --binSize {params.binsize} --sortRegions {params.sort} --sortUsing {params.sortusing} --averageTypeBins {params.binstat} -p {threads}) &> {log}")
+
+rule gzip_deeptools_matrix:
+    input:
+        matrix = "datavis/{annotation}/{norm}/{annotation}-{sample}-{readtype}-{norm}.tsv"
+    output:
+        "datavis/{annotation}/{norm}/{annotation}-{sample}-{readtype}-{norm}.tsv.gz"
+    shell: """
+        pigz -f {input.matrix}
+        """
+
+rule melt_matrix:
+    input:
+        matrix = "datavis/{annotation}/{norm}/{annotation}-{sample}-{readtype}-{norm}.tsv.gz"
+    output:
+        temp("datavis/{annotation}/{norm}/{annotation}-{sample}-{readtype}-{norm}-melted.tsv.gz")
+    params:
+        group = lambda wildcards : SAMPLES[wildcards.sample]["group"],
+        binsize = lambda wildcards : config["annotations"][wildcards.annotation]["binsize"],
+        upstream = lambda wildcards : config["annotations"][wildcards.annotation]["upstream"],
+    script:
+        "scripts/melt_matrix.R"
+
+rule cat_matrices:
+    input:
+        expand("datavis/{{annotation}}/{{norm}}/{{annotation}}-{sample}-{{readtype}}-{{norm}}-melted.tsv.gz", sample=SAMPLES)
+    output:
+        "datavis/{annotation}/{norm}/allsamples-{annotation}-{readtype}-{norm}.tsv.gz"
+    log: "logs/cat_matrices/cat_matrices-{annotation}-{readtype}-{norm}.log"
+    shell: """
+        (cat {input} > {output}) &> {log}
+        """
+
+
+#rule r_datavis:
+#     input:
+#         matrix = "datavis/{annotation}/allsamples-{annotation}.tsv.gz"
+#     output:
+#         heatmap_sample = "datavis/{annotation}/mnase-{annotation}-heatmap-bysample.svg",
+#         heatmap_group = "datavis/{annotation}/mnase-{annotation}-heatmap-bygroup.svg",
+#         metagene_sample = "datavis/{annotation}/mnase-{annotation}-metagene-bysample.svg",
+#         metagene_sample_overlay = "datavis/{annotation}/mnase-{annotation}-metagene-sampleolaybygroup.svg",
+#         metagene_sample_overlay_all = "datavis/{annotation}/mnase-{annotation}-metagene-sampleolayall.svg",
+#         metagene_group = "datavis/{annotation}/mnase-{annotation}-metagene-bygroup.svg",
+#         metagene_overlay = "datavis/{annotation}/mnase-{annotation}-metagene-groupolay.svg",
+#         metaheatmap_sample = "datavis/{annotation}/mnase-{annotation}-metaheatmap-bysample.svg",
+#         metaheatmap_group = "datavis/{annotation}/mnase-{annotation}-metaheatmap-bygroup.svg"
+#     params:
+#         upstream = lambda wildcards : config["annotations"][wildcards.annotation]["upstream"],
+#         dnstream = lambda wildcards : config["annotations"][wildcards.annotation]["dnstream"],
+#         pct_cutoff = lambda wildcards : config["annotations"][wildcards.annotation]["pct_cutoff"],
+#         trim_pct = lambda wildcards : config["annotations"][wildcards.annotation]["trim_pct"],
+#         heatmap_cmap = lambda wildcards : config["annotations"][wildcards.annotation]["heatmap_colormap"],
+#         metagene_palette = lambda wildcards : config["annotations"][wildcards.annotation]["metagene_palette"],
+#         avg_heatmap_cmap = lambda wildcards : config["annotations"][wildcards.annotation]["avg_heatmap_cmap"],
+#         refpointlabel = lambda wildcards : config["annotations"][wildcards.annotation]["refpointlabel"],
+#         ylabel = lambda wildcards : config["annotations"][wildcards.annotation]["ylabel"]
+#     script:
+#         "scripts/plotHeatmapsMeta.R"
+
 
 
 # rule build_nucwave_input:
@@ -333,87 +429,6 @@ rule normalize:
 #         (bedGraphToBigWig {input.bg} {input.chrsizes} {output}) &> {log}
 #         """
 
-# rule deeptools_matrix:
-#     input:
-#         annotation = lambda wildcards: config["annotations"][wildcards.annotation]["path"],
-#         #bw = "coverage/bw/{sample}-mnase-midpoint-CPM.bw"
-#         bw = "coverage/bw/{sample}-mnase-midpoint-CPM-smoothed.bw"
-#     output:
-#         dtfile = temp("datavis/{annotation}/{annotation}-{sample}.mat.gz"),
-#         matrix = temp("datavis/{annotation}/{annotation}-{sample}.tsv")
-#     params:
-#         refpoint = lambda wildcards: config["annotations"][wildcards.annotation]["refpoint"],
-#         upstream = lambda wildcards: config["annotations"][wildcards.annotation]["upstream"],
-#         dnstream = lambda wildcards: config["annotations"][wildcards.annotation]["dnstream"],
-#         binsize = lambda wildcards: config["annotations"][wildcards.annotation]["binsize"],
-#         sort = lambda wildcards: config["annotations"][wildcards.annotation]["sort"],
-#         sortusing = lambda wildcards: config["annotations"][wildcards.annotation]["sortby"],
-#         binstat = lambda wildcards: config["annotations"][wildcards.annotation]["binstat"]
-#     threads : config["threads"]
-#     log: "logs/deeptools/computeMatrix-{annotation}-{sample}.log"
-#     run:
-#         if config["annotations"][wildcards.annotation]["nan_afterend"]=="y":
-#             shell("(computeMatrix reference-point -R {input.annotation} -S {input.bw} --referencePoint {params.refpoint} -out {output.dtfile} --outFileNameMatrix {output.matrix} -b {params.upstream} -a {params.dnstream} --nanAfterEnd --binSize {params.binsize} --sortRegions {params.sort} --sortUsing {params.sortusing} --averageTypeBins {params.binstat} -p {threads}) &> {log}")
-#         else:
-#             shell("(computeMatrix reference-point -R {input.annotation} -S {input.bw} --referencePoint {params.refpoint} -out {output.dtfile} --outFileNameMatrix {output.matrix} -b {params.upstream} -a {params.dnstream} --binSize {params.binsize} --sortRegions {params.sort} --sortUsing {params.sortusing} --averageTypeBins {params.binstat} -p {threads}) &> {log}")
-
-# rule gzip_deeptools_matrix:
-#     input:
-#         matrix = "datavis/{annotation}/{annotation}-{sample}.tsv"
-#     output:
-#         "datavis/{annotation}/{annotation}-{sample}.tsv.gz"
-#     shell: """
-#         pigz -f {input}
-#         """
-
-# rule melt_matrix:
-#     input:
-#         matrix = "datavis/{annotation}/{annotation}-{sample}.tsv.gz"
-#     output:
-#         temp("datavis/{annotation}/{annotation}-{sample}-melted.tsv.gz")
-#     params:
-#         group = lambda wildcards : SAMPLES[wildcards.sample]["group"],
-#         binsize = lambda wildcards : config["annotations"][wildcards.annotation]["binsize"],
-#         upstream = lambda wildcards : config["annotations"][wildcards.annotation]["upstream"],
-#         dnstream = lambda wildcards : config["annotations"][wildcards.annotation]["dnstream"]
-#     script:
-#         "scripts/melt_matrix.R"
-
-# rule cat_matrices:
-#     input:
-#         expand("datavis/{{annotation}}/{{annotation}}-{sample}-melted.tsv.gz", sample=SAMPLES)
-#     output:
-#         "datavis/{annotation}/allsamples-{annotation}.tsv.gz"
-#     shell: """
-#         cat {input} > {output}
-#         """
-
-# rule r_datavis:
-#     input:
-#         matrix = "datavis/{annotation}/allsamples-{annotation}.tsv.gz"
-#     output:
-#         heatmap_sample = "datavis/{annotation}/mnase-{annotation}-heatmap-bysample.svg",
-#         heatmap_group = "datavis/{annotation}/mnase-{annotation}-heatmap-bygroup.svg",
-#         metagene_sample = "datavis/{annotation}/mnase-{annotation}-metagene-bysample.svg",
-#         metagene_sample_overlay = "datavis/{annotation}/mnase-{annotation}-metagene-sampleolaybygroup.svg",
-#         metagene_sample_overlay_all = "datavis/{annotation}/mnase-{annotation}-metagene-sampleolayall.svg",
-#         metagene_group = "datavis/{annotation}/mnase-{annotation}-metagene-bygroup.svg",
-#         metagene_overlay = "datavis/{annotation}/mnase-{annotation}-metagene-groupolay.svg",
-#         metaheatmap_sample = "datavis/{annotation}/mnase-{annotation}-metaheatmap-bysample.svg",
-#         metaheatmap_group = "datavis/{annotation}/mnase-{annotation}-metaheatmap-bygroup.svg"
-#     params:
-#         upstream = lambda wildcards : config["annotations"][wildcards.annotation]["upstream"],
-#         dnstream = lambda wildcards : config["annotations"][wildcards.annotation]["dnstream"],
-#         pct_cutoff = lambda wildcards : config["annotations"][wildcards.annotation]["pct_cutoff"],
-#         trim_pct = lambda wildcards : config["annotations"][wildcards.annotation]["trim_pct"],
-#         heatmap_cmap = lambda wildcards : config["annotations"][wildcards.annotation]["heatmap_colormap"],
-#         metagene_palette = lambda wildcards : config["annotations"][wildcards.annotation]["metagene_palette"],
-#         avg_heatmap_cmap = lambda wildcards : config["annotations"][wildcards.annotation]["avg_heatmap_cmap"],
-#         refpointlabel = lambda wildcards : config["annotations"][wildcards.annotation]["refpointlabel"],
-#         ylabel = lambda wildcards : config["annotations"][wildcards.annotation]["ylabel"]
-#     script:
-#         "scripts/plotHeatmapsMeta.R"
-
 # rule meta_oneoff:
 #     input:
 #         matrix = "datavis/allcodingTSS/allsamples-allcodingTSS.tsv.gz"
@@ -464,72 +479,3 @@ rule normalize:
 #         """
 
 # ##for now I use default parameters except for paired end
-
-# rule dpos_wig_to_bigwig:
-#     input:
-#         wig = "danpos/{condition}-v-{control}/diff/danpos_{condition}-danpos_{control}.pois_diff.wig",
-#         chrsizes = config["genome"]["chrsizes"]
-#     output:
-#         "danpos/{condition}-v-{control}/diff/danpos_{condition}-danpos_{control}.pois_diff.bw",
-#     log: "logs/dpos_wig_to_bigwig/dpos_wig_to_bigwig-{condition}-v-{control}.log"
-#     shell: """
-#         (wigToBigWig {input.wig} {input.chrsizes} {output} ) &> {log}
-#         """
-
-# rule dpos_deeptools_matrix:
-#     input:
-#         annotation = lambda wildcards: config["annotations"][wildcards.annotation]["path"],
-#         bw = "danpos/{condition}-v-{control}/diff/danpos_{condition}-danpos_{control}.pois_diff.bw",
-#     output:
-#         dtfile = temp("datavis/{annotation}/dpos/dpos-{annotation}-{condition}-v-{control}.mat.gz"),
-#         matrix = temp("datavis/{annotation}/dpos/dpos-{annotation}-{condition}-v-{control}.tsv")
-#     params:
-#         refpoint = lambda wildcards: config["annotations"][wildcards.annotation]["refpoint"],
-#         upstream = lambda wildcards: config["annotations"][wildcards.annotation]["upstream"],
-#         dnstream = lambda wildcards: config["annotations"][wildcards.annotation]["dnstream"],
-#         binsize = lambda wildcards: config["annotations"][wildcards.annotation]["binsize"],
-#         sort = lambda wildcards: config["annotations"][wildcards.annotation]["sort"],
-#         sortusing = lambda wildcards: config["annotations"][wildcards.annotation]["sortby"],
-#         binstat = lambda wildcards: config["annotations"][wildcards.annotation]["binstat"]
-#     threads : config["threads"]
-#     log: "logs/deeptools/dpos_computeMatrix-{annotation}-{condition}-v-{control}.log"
-#     shell: """
-#         (computeMatrix reference-point -R {input.annotation} -S {input.bw} --referencePoint {params.refpoint} -out {output.dtfile} --outFileNameMatrix {output.matrix} -b {params.upstream} -a {params.dnstream} --nanAfterEnd --binSize {params.binsize} --sortRegions {params.sort} --sortUsing {params.sortusing} --averageTypeBins {params.binstat} -p {threads}) &> {log}
-#         """
-#     #shell: """
-#     #    (computeMatrix reference-point -R {input.annotation} -S {input.bw} --referencePoint {params.refpoint} -out {output.dtfile} --outFileNameMatrix {output.matrix} -b {params.upstream} -a {params.dnstream} --binSize {params.binsize} --sortRegions {params.sort} --sortUsing {params.sortusing} --averageTypeBins {params.binstat} -p {threads}) &> {log}
-#     #    """
-
-# rule dpos_gzip_deeptools_table:
-#     input:
-#         tsv = "datavis/{annotation}/dpos/dpos-{annotation}-{condition}-v-{control}.tsv",
-#         mat = "datavis/{annotation}/dpos/dpos-{annotation}-{condition}-v-{control}.mat.gz"
-#     output:
-#         "datavis/{annotation}/dpos/dpos-{annotation}-{condition}-v-{control}-t.tsv.gz"
-#     shell: """
-#         pigz -fc {input.tsv} > {output}
-#         rm {input.mat}
-#         """
-
-# rule dpos_melt_matrix:
-#     input:
-#         matrix = "datavis/{annotation}/dpos/dpos-{annotation}-{condition}-v-{control}-t.tsv.gz"
-#     output:
-#         temp("datavis/{annotation}/dpos/dpos-{annotation}-{condition}-v-{control}-melted.tsv.gz")
-#     params:
-#         controlgroup = lambda wildcards : wildcards.control,
-#         conditiongroup = lambda wildcards : wildcards.condition,
-#         binsize = lambda wildcards : config["annotations"][wildcards.annotation]["binsize"],
-#         upstream = lambda wildcards : config["annotations"][wildcards.annotation]["upstream"],
-#         dnstream = lambda wildcards : config["annotations"][wildcards.annotation]["dnstream"]
-#     script:
-#         "scripts/melt_lfc_matrix.R"
-
-# rule dpos_cat_matrices:
-#     input:
-#         expand("datavis/{{annotation}}/dpos/dpos-{{annotation}}-{condition}-v-{control}-melted.tsv.gz", condition = conditiongroups, control = controlgroups)
-#     output:
-#         "datavis/{annotation}/dpos/dpos-allconditions-{annotation}.tsv.gz"
-#     shell: """
-#         cat {input} > {output}
-#         """
