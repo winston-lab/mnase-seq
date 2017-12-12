@@ -10,7 +10,7 @@ melt = function(inmatrix, group, sample, binsize, upstream, outpath){
           filter(!is.na(value)) %>%
           transmute(group = group, 
                     sample = sample,
-                    index = as.numeric(index),
+                    index = as.integer(index),
                     position = (as.numeric(variable)*binsize-upstream)/1000,
                     cpm = as.numeric(value)) 
     
