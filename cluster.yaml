@@ -1,6 +1,6 @@
 __default__ : 
     queue : "short"
-    time : 710
+    time : 60
     n : 1
     mem : 2000
     name : "{rule}.{wildcards}"
@@ -80,12 +80,12 @@ bg_to_bw:
     mem: 2000
 
 deeptools_matrix:
-    time : 60
+    time : 15 
     n : 1
     mem : 2000
 
 gzip_deeptools_matrix:
-    time : 30
+    time : 10
     n : 1
     mem : 2000
 
@@ -99,7 +99,7 @@ cat_matrices:
     mem : 2000
 
 r_datavis:
-    time : 120
+    time : 35 
     mem : 10000
 
 meta_oneoff:
