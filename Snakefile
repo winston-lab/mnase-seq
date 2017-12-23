@@ -44,7 +44,6 @@ rule all:
         expand("coverage/{counttype}/{sample}-mnase-midpoint-{counttype}.bedgraph", sample=SAMPLES, counttype=COUNTTYPES),
         expand("coverage/{norm}/{sample}-mnase-{readtype}-{norm}.bedgraph", norm=NORMS, sample=SAMPLES, readtype=["midpoint"]),
         #datavis
-        expand("datavis/{annotation}/{norm}/allsamples-{annotation}-{readtype}-{norm}.tsv.gz", annotation=config["annotations"], norm=NORMS, readtype=["midpoint"]),
         expand(expand("datavis/{{annotation}}/spikenorm/mnase-{{annotation}}-spikenorm-{{status}}_{condition}-v-{control}-{{readtype}}-heatmap-bysample.svg", zip, condition=conditiongroups_si+["all"], control=controlgroups_si+["all"]), annotation=config["annotations"], readtype=["midpoint"], status=["all","passing"]) + expand(expand("datavis/{{annotation}}/libsizenorm/mnase-{{annotation}}-libsizenorm-{{status}}_{condition}-v-{control}-{{readtype}}-heatmap-bysample.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), annotation=config["annotations"], readtype=["midpoint"], status=["all","passing"]) if sisamples else expand(expand("datavis/{{annotation}}/libsizenorm/mnase-{{annotation}}-libsizenorm-{{status}}_{condition}-v-{control}-{{readtype}}-heatmap-bysample.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), annotation=config["annotations"], readtype=["midpoint"], status=["all","passing"])
 
 def plotcorrsamples(wildcards):
@@ -180,20 +179,7 @@ rule bowtie:
        "logs/bowtie/bowtie-align-{sample}.log"
     shell: """
         (bowtie -v {params.max_mismatch} -I {params.min_ins} -X {params.max_ins} --fr --nomaqround --best -S -p {threads} --un alignment/unaligned-{wildcards.sample}.fastq {params.idx_path}/{params.basename} -1 {input.r1} -2 {input.r2} | samtools view -buh -f 0x2 - | samtools sort -T .{wildcards.sample} -@ {threads} -o {output.bam} -) &> {log}
-        """
-
-rule gzip_loose_fastq:
-    input:
-        "alignment/{sample}.bam",
-        unaligned_r1 = "alignment/unaligned-{sample}_1.fastq",
-        unaligned_r2 = "alignment/unaligned-{sample}_2.fastq"
-    output:
-        unaligned_r1 = "alignment/unaligned-{sample}_1.fastq.gz",
-        unaligned_r2 = "alignment/unaligned-{sample}_2.fastq.gz"
-    threads : config["threads"]
-    shell: """
-        pigz -f {input.unaligned_r1}
-        pigz -f {input.unaligned_r2}
+        (pigz -fk alignment/unaligned-{wildcards.sample}_1.fastq alignment/unaligned-{wildcards.sample}_2.fastq) &>> {log}
         """
 
 #the index is required use region arguments in samtools view to separate the species
@@ -297,7 +283,8 @@ rule deeptools_matrix:
         bw = "coverage/{norm}/{sample}-mnase-{readtype}-{norm}.bw"
     output:
         dtfile = temp("datavis/{annotation}/{norm}/{annotation}-{sample}-{readtype}-{norm}.mat.gz"),
-        matrix = temp("datavis/{annotation}/{norm}/{annotation}-{sample}-{readtype}-{norm}.tsv")
+        matrix = temp("datavis/{annotation}/{norm}/{annotation}-{sample}-{readtype}-{norm}.tsv"),
+        matrix_gz  = "datavis/{annotation}/{norm}/{annotation}-{sample}-{readtype}-{norm}.tsv.gz"
     params:
         refpoint = lambda wildcards: config["annotations"][wildcards.annotation]["refpoint"],
         upstream = lambda wildcards: config["annotations"][wildcards.annotation]["upstream"] + config["annotations"][wildcards.annotation]["binsize"],
@@ -310,18 +297,9 @@ rule deeptools_matrix:
     log: "logs/deeptools/computeMatrix-{annotation}-{sample}-{readtype}-{norm}.log"
     run:
         if config["annotations"][wildcards.annotation]["nan_afterend"]=="y":
-            shell("(computeMatrix reference-point -R {input.annotation} -S {input.bw} --referencePoint {params.refpoint} -out {output.dtfile} --outFileNameMatrix {output.matrix} -b {params.upstream} -a {params.dnstream} --nanAfterEnd --binSize {params.binsize} --sortRegions {params.sort} --sortUsing {params.sortusing} --averageTypeBins {params.binstat} -p {threads}) &> {log}")
+            shell("(computeMatrix reference-point -R {input.annotation} -S {input.bw} --referencePoint {params.refpoint} -out {output.dtfile} --outFileNameMatrix {output.matrix} -b {params.upstream} -a {params.dnstream} --nanAfterEnd --binSize {params.binsize} --sortRegions {params.sort} --sortUsing {params.sortusing} --averageTypeBins {params.binstat} -p {threads}; pigz -fk {output.matrix}) &> {log}")
         else:
-            shell("(computeMatrix reference-point -R {input.annotation} -S {input.bw} --referencePoint {params.refpoint} -out {output.dtfile} --outFileNameMatrix {output.matrix} -b {params.upstream} -a {params.dnstream} --binSize {params.binsize} --sortRegions {params.sort} --sortUsing {params.sortusing} --averageTypeBins {params.binstat} -p {threads}) &> {log}")
-
-rule gzip_deeptools_matrix:
-    input:
-        matrix = "datavis/{annotation}/{norm}/{annotation}-{sample}-{readtype}-{norm}.tsv"
-    output:
-        "datavis/{annotation}/{norm}/{annotation}-{sample}-{readtype}-{norm}.tsv.gz"
-    shell: """
-        pigz -f {input.matrix}
-        """
+            shell("(computeMatrix reference-point -R {input.annotation} -S {input.bw} --referencePoint {params.refpoint} -out {output.dtfile} --outFileNameMatrix {output.matrix} -b {params.upstream} -a {params.dnstream} --binSize {params.binsize} --sortRegions {params.sort} --sortUsing {params.sortusing} --averageTypeBins {params.binstat} -p {threads}; pigz -fk {output.matrix}) &> {log}")
 
 rule melt_matrix:
     input:
@@ -346,35 +324,43 @@ rule cat_matrices:
         (cat {input} > {output}) &> {log}
         """
 
-#TODO: add clustering
-rule r_datavis:
+rule r_heatmaps:
     input:
         matrix = "datavis/{annotation}/{norm}/allsamples-{annotation}-{readtype}-{norm}.tsv.gz"
     output:
         heatmap_sample = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}-{readtype}-heatmap-bysample.svg",
         heatmap_group = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}-{readtype}-heatmap-bygroup.svg",
-        metagene_sample = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}-{readtype}-metagene-bysample.svg",
-        metagene_sample_overlay = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}-{readtype}-metagene-sampleoverlaybygroup.svg",
-        metagene_sample_overlay_all = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}-{readtype}-metagene-sampleoverlayall.svg",
-        metagene_group = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}-{readtype}-metagene-bygroup.svg",
-        metagene_overlay = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}-{readtype}-metagene-groupoverlay.svg",
-        metaheatmap_sample = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}-{readtype}-metaheatmap-bysample.svg",
-        metaheatmap_group = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}-{readtype}-metaheatmap-bygroup.svg"
     params:
         samplelist = plotcorrsamples,
         upstream = lambda wildcards : config["annotations"][wildcards.annotation]["upstream"],
         dnstream = lambda wildcards : config["annotations"][wildcards.annotation]["dnstream"],
         pct_cutoff = lambda wildcards : config["annotations"][wildcards.annotation]["pct_cutoff"],
-        trim_pct = lambda wildcards : config["annotations"][wildcards.annotation]["trim_pct"],
+        cluster = lambda wildcards : config["annotations"][wildcards.annotation]["cluster"],
+        nclust = lambda wildcards: config["annotations"][wildcards.annotation]["nclusters"],
         heatmap_cmap = lambda wildcards : config["annotations"][wildcards.annotation]["heatmap_colormap"],
-        metagene_palette = lambda wildcards : config["annotations"][wildcards.annotation]["metagene_palette"],
-        avg_heatmap_cmap = lambda wildcards : config["annotations"][wildcards.annotation]["avg_heatmap_cmap"],
         refpointlabel = lambda wildcards : config["annotations"][wildcards.annotation]["refpointlabel"],
         ylabel = lambda wildcards : config["annotations"][wildcards.annotation]["ylabel"]
     script:
-        "scripts/plotHeatmapsMeta.R"
+        "scripts/plot_mnase_heatmaps.R"
 
-
+rule r_metagenes:
+    input:
+        qfrags =  "datavis/{annotation}/{norm}/allsamples-{annotation}-{readtype}-{norm}.tsv.gz"
+    output:
+        pmeta_group = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}-{readtype}-metagene-bygroup.svg",
+        pmeta_sample = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}-{readtype}-metagene-bysample.svg",
+        pmeta_goverlay = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}-{readtype}-metagene-groupoverlay.svg",
+        pmeta_soverlay = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}-{readtype}-metagene-sampleoverlayall.svg",
+        pmeta_soverlay_bygroup = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}-{readtype}-metagene-sampleoverlaybygroup.svg"
+    params:
+        samplelist = plotcorrsamples,
+        upstream = lambda wildcards : config["annotations"][wildcards.annotation]["upstream"],
+        dnstream = lambda wildcards : config["annotations"][wildcards.annotation]["dnstream"],
+        trim_pct = lambda wildcards : config["annotations"][wildcards.annotation]["trim_pct"],
+        refpointlabel = lambda wildcards : config["annotations"][wildcards.annotation]["refpointlabel"],
+        ylabel = lambda wildcards : config["annotations"][wildcards.annotation]["ylabel"]
+    script:
+        "scripts/plot_mnase_metagenes.R"
 
 # rule build_nucwave_input:
 #     input:

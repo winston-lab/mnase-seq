@@ -98,9 +98,13 @@ cat_matrices:
     time : 30
     mem : 2000
 
-r_datavis:
-    time : 35 
-    mem : 10000
+r_heatmaps:
+    time : 90 
+    mem : 20000
+
+r_metagenes:
+    time : 90 
+    mem : 20000
 
 meta_oneoff:
     queue : "priority"
