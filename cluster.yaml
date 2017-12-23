@@ -84,13 +84,8 @@ deeptools_matrix:
     n : 1
     mem : 2000
 
-gzip_deeptools_matrix:
-    time : 10
-    n : 1
-    mem : 2000
-
 melt_matrix:
-    time : 20
+    time : 10
     n : 1
     mem : 2000
 

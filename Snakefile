@@ -44,7 +44,7 @@ rule all:
         expand("coverage/{counttype}/{sample}-mnase-midpoint-{counttype}.bedgraph", sample=SAMPLES, counttype=COUNTTYPES),
         expand("coverage/{norm}/{sample}-mnase-{readtype}-{norm}.bedgraph", norm=NORMS, sample=SAMPLES, readtype=["midpoint"]),
         #datavis
-        expand(expand("datavis/{{annotation}}/spikenorm/mnase-{{annotation}}-spikenorm-{{status}}_{condition}-v-{control}-{{readtype}}-heatmap-bysample.svg", zip, condition=conditiongroups_si+["all"], control=controlgroups_si+["all"]), annotation=config["annotations"], readtype=["midpoint"], status=["all","passing"]) + expand(expand("datavis/{{annotation}}/libsizenorm/mnase-{{annotation}}-libsizenorm-{{status}}_{condition}-v-{control}-{{readtype}}-heatmap-bysample.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), annotation=config["annotations"], readtype=["midpoint"], status=["all","passing"]) if sisamples else expand(expand("datavis/{{annotation}}/libsizenorm/mnase-{{annotation}}-libsizenorm-{{status}}_{condition}-v-{control}-{{readtype}}-heatmap-bysample.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), annotation=config["annotations"], readtype=["midpoint"], status=["all","passing"])
+        expand(expand("datavis/{{annotation}}/spikenorm/mnase-{{annotation}}-spikenorm-{{status}}_{condition}-v-{control}-{{readtype}}-{{plot}}-bysample.svg", zip, condition=conditiongroups_si+["all"], control=controlgroups_si+["all"]), annotation=config["annotations"], readtype=["midpoint"], status=["all","passing"], plot=["heatmap","metagene"]) + expand(expand("datavis/{{annotation}}/libsizenorm/mnase-{{annotation}}-libsizenorm-{{status}}_{condition}-v-{control}-{{readtype}}-{{plot}}-bysample.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), annotation=config["annotations"], readtype=["midpoint"], status=["all","passing"], plot=["heatmap", "metagene"]) if sisamples else expand(expand("datavis/{{annotation}}/libsizenorm/mnase-{{annotation}}-libsizenorm-{{status}}_{condition}-v-{control}-{{readtype}}-{{plot}}-bysample.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), annotation=config["annotations"], readtype=["midpoint"], status=["all","passing"], plot=["heatmap","metagene"])
 
 def plotcorrsamples(wildcards):
     dd = SAMPLES if wildcards.status=="all" else PASSING
@@ -173,7 +173,9 @@ rule bowtie:
     output:
         bam ="alignment/{sample}.bam",
         unaligned_1 = temp("alignment/unaligned-{sample}_1.fastq"),
-        unaligned_2 = temp("alignment/unaligned-{sample}_2.fastq")
+        unaligned_1_gz = "alignment/unaligned-{sample}_1.fastq.gz",
+        unaligned_2 = temp("alignment/unaligned-{sample}_2.fastq"),
+        unaligned_2_gz = "alignment/unaligned-{sample}_2.fastq.gz"
     threads: config["threads"]
     log:
        "logs/bowtie/bowtie-align-{sample}.log"
@@ -200,7 +202,7 @@ rule bam_separate_species:
         bai = "alignment/{sample}.bam.bai",
         chrsizes = config["combinedgenome"]["chrsizes"]
     output:
-        "alignment/{sample}-{species}only.bam"
+        "alignment/{sample}_{species}only.bam"
     log: "logs/bam_separate_species/bam_separate_species-{sample}-{species}.log"
     shell: """
         (samtools view -bh {input.bam} $(grep {wildcards.species} {input.chrsizes} | awk 'BEGIN{{FS="\t"; ORS=" "}}{{print $1}}') > {output}) &> {log}
@@ -209,7 +211,7 @@ rule bam_separate_species:
 #bam must be sorted by name for bedpe. We don't do this in the bowtie step since samtools index required position-sorted bam.
 rule get_fragments:
     input:
-        bam = "alignment/{sample}-{species}only.bam"
+        bam = "alignment/{sample}_{species}only.bam"
     output:
         "alignment/fragments/{sample}-{species}fragments.bedpe"
     threads: config["threads"]
@@ -249,6 +251,8 @@ rule normalize:
         scalefactor = lambda wildcards: config["spikein-pct"] if wildcards.norm=="spikenorm" else 1
     output:
         "coverage/{norm}/{sample}-mnase-{readtype}-{norm}.bedgraph"
+    wildcard_constraints:
+        norm="libsizenorm|spikenorm"
     log: "logs/normalize/normalize-{sample}-{norm}-{readtype}.log"
     shell: """
         (bash scripts/libsizenorm.sh {input.fragcounts} {input.coverage} {params.scalefactor} > {output}) &> {log}
