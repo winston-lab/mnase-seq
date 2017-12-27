@@ -18,14 +18,14 @@ label_xaxis= function(ggp, refptlabel, upstream, dnstream){
                                labels=format_xaxis_kb(refptlabel=refptlabel),
                                name=paste("distance from", refptlabel, "(kb)"),
                                limits = c(-upstream/1000, dnstream/1000),
-                               expand=c(0,0))
+                               expand=c(0.01,0))
     } else{
         ggp = ggp +
             scale_x_continuous(breaks=scales::pretty_breaks(n=3),
                                labels=format_xaxis_nt(refptlabel=refptlabel),
                                name=paste("distance from", refptlabel, "(nt)"),
                                limits = c(-upstream/1000, dnstream/1000),
-                               expand=c(0,0))
+                               expand=c(0.01,0))
     } 
     return(ggp)
 }
@@ -47,7 +47,7 @@ hmap = function(df, nindices, ylabel, upstream, dnstream, refptlab, cmap){
               axis.text.x = element_text(size=12, face="bold", color="black", margin = unit(c(0,0,0,0),"cm")),
               panel.grid.major.x = element_line(color="black"),
               panel.grid.minor.x = element_line(color="black"),
-              panel.grid.major.y = element_line(color="grey80"),
+              panel.grid.major.y = element_line(color="black"),
               panel.grid.minor.y = element_blank(),
               panel.spacing.x = unit(.5, "cm"))
     heatmap_base = heatmap_base %>%
@@ -92,9 +92,10 @@ main = function(intable, samplelist, upstream, dnstream, pct_cutoff,
     
     #plot heatmap facetted by sample and group
     df_sample = raw %>% left_join(repl_df, by="sample")
+    sample_cutoff = quantile(df_sample$cpm, probs=pct_cutoff, na.rm=TRUE)
     df_sample = df_sample %>%
         mutate_at(vars(cpm),
-                  funs(pmin(quantile(df_sample$cpm, probs=pct_cutoff, na.rm=TRUE), .)))
+                  funs(pmin(sample_cutoff, .)))
     hmap_sample = hmap(df=df_sample, nindices=nindices, ylabel=ylabel,
                        upstream=upstream, dnstream=dnstream, refptlab=refptlab,
                        cmap=cmap) +
@@ -108,9 +109,11 @@ main = function(intable, samplelist, upstream, dnstream, pct_cutoff,
 
     
     df_group = raw %>% group_by(group, index, position) %>% summarise(cpm = mean(cpm))
+    rm(raw)
+    group_cutoff = quantile(df_group$cpm, probs=pct_cutoff, na.rm=TRUE)
     df_group = df_group %>% 
         mutate_at(vars(cpm),
-                  funs(pmin(quantile(df_group$cpm, probs=pct_cutoff, na.rm=TRUE), .)))
+                  funs(pmin(group_cutoff, .)))
     hmap_group = hmap(df=df_group, nindices=nindices, ylabel=ylabel,
                        upstream=upstream, dnstream=dnstream, refptlab=refptlab,
                        cmap=cmap) +
