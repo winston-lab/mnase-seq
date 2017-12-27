@@ -94,7 +94,7 @@ cat_matrices:
     mem : 2000
 
 r_heatmaps:
-    time : 15 
+    time : 20 
     mem : 10000
 
 r_metagenes:

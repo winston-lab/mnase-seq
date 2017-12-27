@@ -117,11 +117,11 @@ rule cutadapt:
         qual_cutoff = config["cutadapt"]["qual_cutoff"],
         adapter = lambda wildcards : SAMPLES[wildcards.sample]["barcode"]+"T",
         max_len = lambda wildcards: config["read-length"] - len(SAMPLES[wildcards.sample]["barcode"]+"T")
-    threads: config["threads"]
+    # threads: config["threads"]
     log:
         "logs/cutadapt/cutadapt-{sample}.log"
     shell: """
-        (cutadapt -e 0.15 -u 1 -G ^{params.adapter} -q {params.qual_cutoff} --minimum-length 5 --maximum-length {params.max_len} -j {threads} -o {output.r1} -p {output.r2} {input.r1} {input.r2}) &> {log}
+        (cutadapt -e 0.15 -u 1 -G ^{params.adapter} -q {params.qual_cutoff} --minimum-length 5 --maximum-length {params.max_len} -o {output.r1} -p {output.r2} {input.r1} {input.r2}) &> {log}
         """
 
 #fastQC on demultiplexed and cleaned reads

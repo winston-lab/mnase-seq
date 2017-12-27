@@ -18,14 +18,14 @@ label_xaxis= function(ggp, refptlabel, upstream, dnstream){
                                labels=format_xaxis_kb(refptlabel=refptlabel),
                                name=paste("distance from", refptlabel, "(kb)"),
                                limits = c(-upstream/1000, dnstream/1000),
-                               expand=c(0.01,0))
+                               expand=c(0.05,0))
     } else{
         ggp = ggp +
             scale_x_continuous(breaks=scales::pretty_breaks(n=3),
                                labels=format_xaxis_nt(refptlabel=refptlabel),
                                name=paste("distance from", refptlabel, "(nt)"),
                                limits = c(-upstream/1000, dnstream/1000),
-                               expand=c(0.01,0))
+                               expand=c(0.05,0))
     } 
     return(ggp)
 }
