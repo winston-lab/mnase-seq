@@ -18,7 +18,7 @@ demultiplex:
 
 cutadapt:
     time : 120
-    n : 2
+    n : 1
     mem : 4000 
 
 fastqc_cleaned:
@@ -98,7 +98,7 @@ r_heatmaps:
     mem : 10000
 
 r_metagenes:
-    time : 15 
+    time : 20 
     mem : 10000
 
 meta_oneoff:
