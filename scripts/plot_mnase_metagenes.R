@@ -1,7 +1,7 @@
+library(psych)
 library(tidyverse)
 library(forcats)
-library(viridis)
-library(psych)
+library(ggthemes)
 
 import = function(path){
     read_tsv(path,
@@ -20,7 +20,7 @@ format_xaxis_nt = function(refptlabel){
 }
 
 label_xaxis= function(ggp, refptlabel, upstream, downstream){
-    if(upstream>1000 | downstream>1000){
+    if(upstream>500 | downstream>500){
         ggp = ggp +
             scale_x_continuous(breaks=scales::pretty_breaks(n=3),
                                labels=format_xaxis_kb(refptlabel=refptlabel),
@@ -42,6 +42,7 @@ apply_theme = function(ggp){
     ggp = ggp +
         theme_light() +
         theme(strip.text = element_text(size=12, face="bold", color="black"),
+              strip.text.y = element_text(angle=0),
               axis.text.x = element_text(size=10, face="bold", color="black"),
               axis.text.y = element_text(size=10, color="black"),
               axis.title = element_text(size=12, face="bold"),
@@ -60,8 +61,8 @@ protection_meta = function(df, nindices, ylabel, upstream, downstream, refptlabe
     metagene_base = ggplot(data = df, aes(x=position)) +
         geom_vline(xintercept = 0, size=1, color="grey65") +
         geom_ribbon(aes(ymax=mean+1.96*sem, ymin=mean-1.96*sem),
-                    fill="#3f007d", alpha=0.4, size=0) +
-        geom_line(aes(y=mean), color="#3f007d") +
+                    fill="#114477", alpha=0.4, size=0) +
+        geom_line(aes(y=mean), color="#114477") +
         scale_y_continuous(limits=c(0, NA), name="normalized counts") +
         ggtitle("mean MNase-seq signal",
                 subtitle = paste(nindices, ylabel))
@@ -77,6 +78,10 @@ main = function(intable.qfrags, samplelist, upstream, downstream,
     protection = import(intable.qfrags) %>%
         filter(sample %in% samplelist) %>% 
         mutate_at(vars(sample, group), funs(fct_inorder(., ordered=TRUE)))
+    
+    repl_df = protection %>% select(group, sample) %>% distinct() %>% 
+        group_by(group) %>% mutate(replicate=row_number()) %>% ungroup() %>% 
+        select(-group)
 
     nindices = max(protection$index, na.rm=TRUE)
     nsamples = length(samplelist)
@@ -92,24 +97,24 @@ main = function(intable.qfrags, samplelist, upstream, downstream,
     ggsave(pmeta_group_out, plot=pmeta_group, height=8, width=7*ngroups, units="cm")
     rm(pmeta_group)
     
-    pdf_sample = protection %>% group_by(group, sample, position) %>%
+    pdf_sample = protection %>% left_join(repl_df, by="sample") %>% 
+        group_by(group, sample, replicate, position) %>%
         summarise(mean = winsor.mean(cpm, trim=trim_pct, na.rm=TRUE),
                   sd = winsor.sd(cpm, trim=trim_pct, na.rm=TRUE),
                   sem = winsor.sd(cpm, trim=trim_pct, na.rm=TRUE)/sqrt(n()))
     pmeta_sample = protection_meta(pdf_sample, nindices=nindices, ylabel=ylabel, upstream=upstream,
                                 downstream=downstream, refptlabel=refptlabel) +
-        facet_wrap(~sample, dir="v", ncol=ngroups)
-    ggsave(pmeta_sample_out, plot=pmeta_sample, height=8+5*(nsamples/ngroups-1),
+        facet_grid(replicate~group)
+    ggsave(pmeta_sample_out, plot=pmeta_sample, height=2+4.5*(max(repl_df$replicate)),
            width=7*ngroups, units="cm")
     rm(pmeta_sample)
     
     pmeta_goverlay = ggplot(data=pdf_group, aes(x=position, color=group, fill=group)) +
         geom_vline(xintercept = 0, size=1, color="grey65") +
         geom_ribbon(aes(ymax=mean+1.96*sem, ymin=mean-1.96*sem),
-                        alpha=0.2, size=0) +
+                        alpha=0.3, size=0) +
         geom_line(aes(y=mean)) +
-        scale_fill_brewer(palette="Set1", direction=-1) +
-        scale_color_brewer(palette="Set1", direction=-1) +
+        scale_fill_ptol() + scale_color_ptol() +
         scale_y_continuous(limits=c(0, NA),
                            name="normalized coverage") +
         ggtitle("mean MNase-seq signal",
@@ -128,8 +133,7 @@ main = function(intable.qfrags, samplelist, upstream, downstream,
         geom_ribbon(aes(ymax=mean+1.96*sem, ymin=mean-1.96*sem),
                         alpha=0.2, size=0) +
         geom_line(aes(y=mean)) +
-        scale_fill_brewer(palette="Set1", direction=-1) +
-        scale_color_brewer(palette="Set1", direction=-1) +
+        scale_fill_ptol() + scale_color_ptol() +
         scale_y_continuous(limits=c(0, NA),
                            name="normalized coverage") +
         ggtitle("mean MNase-seq signal",
@@ -147,7 +151,7 @@ main = function(intable.qfrags, samplelist, upstream, downstream,
               strip.placement="outside",
               strip.text.y=element_text(angle=180, hjust=1))
     ggsave(pmeta_soverlay_bygroup_out, plot=pmeta_soverlay_bygroup,
-           width=14, height=6+6*(nsamples/ngroups-1), units="cm")
+           width=14, height=2+4.5*(ngroups), units="cm")
 }
 
 main(intable.qfrags = snakemake@input[["qfrags"]],
