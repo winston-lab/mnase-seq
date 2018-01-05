@@ -72,7 +72,7 @@ plot_depth:
     mem : 4000
 
 smoothed_midpoint_coverage:
-    time : 120
+    time : 60
     mem : 2000
 
 bg_to_bw:
