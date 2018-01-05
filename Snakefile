@@ -25,7 +25,6 @@ localrules: all,
             # get_fragsizes,
             # cat_fragsizes,
             # make_fragments_table,
-            # make_window_file,
             # cat_windows,
             # cat_perbase_depth,
             # group_bam_for_danpos,
@@ -41,10 +40,11 @@ rule all:
         expand("alignment/{sample}.bam", sample=SAMPLES),
         expand("alignment/unaligned-{sample}_{r}.fastq.gz", sample=SAMPLES, r=[1,2]),
         #coverage
-        expand("coverage/{counttype}/{sample}-mnase-midpoint-{counttype}.bedgraph", sample=SAMPLES, counttype=COUNTTYPES),
-        expand("coverage/{norm}/{sample}-mnase-{readtype}-{norm}.bedgraph", norm=NORMS, sample=SAMPLES, readtype=["midpoint"]),
+        expand("coverage/{counttype}/{sample}-mnase-{readtype}-{counttype}.bedgraph", sample=SAMPLES, readtype=["midpoint","wholefrag"], counttype=COUNTTYPES),
+        expand("coverage/{norm}/{sample}-mnase-{readtype}-{norm}.bedgraph", norm=NORMS, sample=SAMPLES, readtype=["midpoint","wholefrag"]),
+        expand("coverage/{norm}/{sample}-mnase-midpoint_smoothed-{norm}.bw", norm=NORMS, sample=SAMPLES),
         #datavis
-        expand(expand("datavis/{{annotation}}/spikenorm/mnase-{{annotation}}-spikenorm-{{status}}_{condition}-v-{control}-{{readtype}}-{{plot}}-bysample.svg", zip, condition=conditiongroups_si+["all"], control=controlgroups_si+["all"]), annotation=config["annotations"], readtype=["midpoint"], status=["all","passing"], plot=["heatmap","metagene"]) + expand(expand("datavis/{{annotation}}/libsizenorm/mnase-{{annotation}}-libsizenorm-{{status}}_{condition}-v-{control}-{{readtype}}-{{plot}}-bysample.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), annotation=config["annotations"], readtype=["midpoint"], status=["all","passing"], plot=["heatmap", "metagene"]) if sisamples else expand(expand("datavis/{{annotation}}/libsizenorm/mnase-{{annotation}}-libsizenorm-{{status}}_{condition}-v-{control}-{{readtype}}-{{plot}}-bysample.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), annotation=config["annotations"], readtype=["midpoint"], status=["all","passing"], plot=["heatmap","metagene"])
+        expand(expand("datavis/{{annotation}}/spikenorm/mnase-{{annotation}}-spikenorm-{{status}}_{condition}-v-{control}-{{readtype}}-{{plot}}-bysample.svg", zip, condition=conditiongroups_si+["all"], control=controlgroups_si+["all"]), annotation=config["annotations"], readtype=["midpoint","wholefrag"], status=["all","passing"], plot=["heatmap","metagene"]) + expand(expand("datavis/{{annotation}}/libsizenorm/mnase-{{annotation}}-libsizenorm-{{status}}_{condition}-v-{control}-{{readtype}}-{{plot}}-bysample.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), annotation=config["annotations"], readtype=["midpoint","wholefrag"], status=["all","passing"], plot=["heatmap", "metagene"]) if sisamples else expand(expand("datavis/{{annotation}}/libsizenorm/mnase-{{annotation}}-libsizenorm-{{status}}_{condition}-v-{control}-{{readtype}}-{{plot}}-bysample.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), annotation=config["annotations"], readtype=["midpoint","wholefrag"], status=["all","passing"], plot=["heatmap","metagene"])
 
 def plotcorrsamples(wildcards):
     dd = SAMPLES if wildcards.status=="all" else PASSING
@@ -201,11 +201,14 @@ rule bam_separate_species:
         bam = "alignment/{sample}.bam",
         bai = "alignment/{sample}.bam.bai",
         chrsizes = config["combinedgenome"]["chrsizes"]
+    params:
+        filterprefix = lambda wildcards: config["combinedgenome"]["spikein_prefix"] if wildcards.species==config["combinedgenome"]["experimental_prefix"] else config["combinedgenome"]["experimental_prefix"],
     output:
         "alignment/{sample}_{species}only.bam"
+    threads: config["threads"]
     log: "logs/bam_separate_species/bam_separate_species-{sample}-{species}.log"
     shell: """
-        (samtools view -bh {input.bam} $(grep {wildcards.species} {input.chrsizes} | awk 'BEGIN{{FS="\t"; ORS=" "}}{{print $1}}') > {output}) &> {log}
+        (samtools view -h {input.bam} $(grep {wildcards.species} {input.chrsizes} | awk 'BEGIN{{FS="\t"; ORS=" "}}{{print $1}}') | grep -v -e 'SN:{params.filterprefix}' | sed 's/{wildcards.species}//g' | samtools view -bh -@ {threads} -o {output} -) &> {log}
         """
 
 #bam must be sorted by name for bedpe. We don't do this in the bowtie step since samtools index required position-sorted bam.
@@ -230,18 +233,20 @@ rule midpoint_coverage:
         "coverage/{counttype,counts|sicounts}/{sample}-mnase-midpoint-{counttype}.bedgraph"
     log: "logs/midpoint_coverage/midpoint_coverage-{sample}-{counttype}.log"
     shell: """
-        (awk 'BEGIN{{FS=OFS="\t"}} width=$6-$2 {{if(width % 2 != 0){{width -= 1}}; mid=$2+width/2; print $1, mid, mid+1, $7}}' {input.bedpe} | sed -e 's/{params.prefix}//g' | sort -k1,1 -k2,2n | bedtools genomecov -i stdin -g {input.chrsizes} -bga | sort -k1,1 -k2,2n > {output}) &> {log}
+        (awk 'BEGIN{FS=OFS="\t"} {width=$6-$2} {(width % 2 != 0)? (mid=(width+1)/2+$2) : ((rand()<0.5)? (mid=width/2+$2) : (mid=width/2+$2+1))} {print $1, mid, mid+1, $7}' {input.bedpe} | sort -k1,1 -k2,2n | bedtools genomecov -i stdin -g {input.chrsizes} -bga | sort -k1,1 -k2,2n > {output}) &> {log}
         """
 
-# rule whole_fragment_coverage:
-#     input:
-#         bam = lambda wildcards: "alignment/" + wildcards.sample + "-" + config["combinedgenome"]["experimental_prefix"] + "only.bam" if wildcards.counttype=="counts" else "alignment/" + wildcards.sample + "-" + config["combinedgenome"]["spikein_prefix"] + "only.bam",
-#     output:
-#         "coverage/{counttype}/{sample}-mnase-wholefrag-{counttype}.bedgraph"
-#     log : "logs/total_coverage/total_coverage-{sample}-{counttype}.log"
-#     shell: """
-#         (bedtools genomecov -ibam {input.bam} -bga -pc | sort -k1,1 -k2,2n > {output}) &> {log}
-#         """
+rule whole_fragment_coverage:
+    input:
+        bam = lambda wildcards: "alignment/" + wildcards.sample + "_" + config["combinedgenome"]["experimental_prefix"] + "only.bam" if wildcards.counttype=="counts" else "alignment/" + wildcards.sample + "_" + config["combinedgenome"]["spikein_prefix"] + "only.bam",
+    output:
+        "coverage/{counttype}/{sample}-mnase-wholefrag-{counttype}.bedgraph"
+    wildcard_constraints:
+        counttype="counts|sicounts"
+    log : "logs/total_coverage/total_coverage-{sample}-{counttype}.log"
+    shell: """
+        (bedtools genomecov -ibam {input.bam} -bga -pc | sort -k1,1 -k2,2n > {output}) &> {log}
+        """
 
 rule normalize:
     input:
@@ -258,6 +263,39 @@ rule normalize:
         (bash scripts/libsizenorm.sh {input.fragcounts} {input.coverage} {params.scalefactor} > {output}) &> {log}
         """
 
+rule map_to_windows:
+  input:
+      bg = "coverage/{norm}/{sample}-mnase-midpoint-{norm}.bedgraph",
+      chrsizes = os.path.splitext(config["genome"]["chrsizes"])[0] + "-STRANDED.tsv",
+  output:
+      temp("coverage/{norm}/{sample}-mnase-midpoint-window-{windowsize}-coverage-{norm}.bedgraph")
+  shell: """
+    bedtools makewindows -g {input.chrsizes} -w {wildcards.windowsize} | LC_COLLATE=C sort -k1,1 -k2,2n | bedtools map -a stdin -b {input.bg} -c 4 -o sum > {output.exp}
+    """
+
+rule join_window_counts:
+    input:
+        exp = expand("coverage/{{norm}}/{sample}-mnase-midpoint-window-{{windowsize}}-coverage-{{norm}}.bedgraph", sample=SAMPLES),
+    output:
+        exp = "coverage/{norm}/union-bedgraph-window-{windowsize}-{norm}.tsv.gz",
+    params:
+        names = list(SAMPLES.keys())
+    log: "logs/join_window_counts/join_window_counts-{norm}.log"
+    shell: """
+        (bedtools unionbedg -i {input.exp} -header -names {params.names} | bash scripts/cleanUnionbedg.sh | pigz -f > {output.exp}) &> {log}
+        """
+
+rule plotcorrelations:
+    input:
+        "coverage/{norm}/union-bedgraph-window-{windowsize}-{norm}.tsv.gz"
+    output:
+        "qual_ctrl/{status}/{condition}-v-{control}-mnase-{status}-window-{windowsize}-{norm}-correlations.svg"
+    params:
+        pcount = 0.1,
+        samplelist = plotcorrsamples
+    script:
+        "scripts/plotcorr.R"
+
 rule bg_to_bw:
     input:
         bedgraph = "coverage/{norm}/{sample}-mnase-{readtype}-{norm}.bedgraph",
@@ -269,17 +307,17 @@ rule bg_to_bw:
         (bedGraphToBigWig {input.bedgraph} {input.chrsizes} {output}) &> {log}
         """
 
-# rule smoothed_midpoint_coverage:
-#     input:
-#         "coverage/bw/{sample}-mnase-midpoint-CPM.bw"
-#     output:
-#         "coverage/bw/{sample}-mnase-midpoint-CPM-smoothed.bw"
-#     params:
-#         bandwidth = config["smooth_bandwidth"]
-#     log: "logs/smoothed_midpoint_coverage/smooth_midpoint_coverage-{sample}.log"
-#     shell: """
-#         (python scripts/smooth_midpoint_coverage.py -b {params.bandwidth} -i {input} -o {output}) &> {log}
-#         """
+rule smoothed_midpoint_coverage:
+    input:
+        "coverage/{norm}/{sample}-mnase-midpoint-{norm}.bw"
+    output:
+        "coverage/{norm}/{sample}-mnase-midpoint_smoothed-{norm}.bw"
+    params:
+        bandwidth = config["smooth_bandwidth"]
+    log: "logs/smoothed_midpoint_coverage/smooth_midpoint_coverage-{sample}.log"
+    shell: """
+        (python scripts/smooth_midpoint_coverage.py -b {params.bandwidth} -i {input} -o {output}) &> {log}
+        """
 
 rule deeptools_matrix:
     input:
@@ -433,24 +471,6 @@ rule r_metagenes:
 #     shell: """
 #         (bedGraphToBigWig {input.bg} {input.chrsizes} {output}) &> {log}
 #         """
-
-# rule meta_oneoff:
-#     input:
-#         matrix = "datavis/allcodingTSS/allsamples-allcodingTSS.tsv.gz"
-#     output:
-#         metagene_overlay = "datavis/mnase-{annotation}-metagene-groupoverlay-oneoff.pdf"
-#     params:
-#         binsize = lambda wildcards : config["annotations"][wildcards.annotation]["binsize"],
-#         upstream = lambda wildcards : config["annotations"][wildcards.annotation]["upstream"],
-#         dnstream = lambda wildcards : config["annotations"][wildcards.annotation]["dnstream"],
-#         pct_cutoff = lambda wildcards : config["annotations"][wildcards.annotation]["pct_cutoff"],
-#         heatmap_cmap = lambda wildcards : config["annotations"][wildcards.annotation]["heatmap_colormap"],
-#         metagene_palette = lambda wildcards : config["annotations"][wildcards.annotation]["metagene_palette"],
-#         avg_heatmap_cmap = lambda wildcards : config["annotations"][wildcards.annotation]["avg_heatmap_cmap"],
-#         refpointlabel = lambda wildcards : config["annotations"][wildcards.annotation]["refpointlabel"],
-#         ylabel = lambda wildcards : config["annotations"][wildcards.annotation]["ylabel"]
-#     script:
-#         "scripts/plotMetaOneOff.R"
 
 # rule group_bam_for_danpos:
 #     input:
