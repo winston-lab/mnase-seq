@@ -32,19 +32,20 @@ localrules: all,
 rule all:
     input:
         #fastqc
-        "qual_ctrl/fastqc/raw",
-        expand("qual_ctrl/fastqc/{sample}/{sample}-clean.{read}_fastqc.html", sample=SAMPLES, read=["r1","r2"]),
+        expand("qual_ctrl/fastqc/raw/{read}/{fname}/fastqc_data.txt", zip, read=["r1", "r2"], fname=[os.path.split(config["fastq"][rr])[1].split(".fastq")[0] + "_fastqc" for rr in ["r1", "r2"]]),
+        expand("qual_ctrl/fastqc/{fqtype}/{sample}-{fqtype}.r1_fastqc/fastqc_data.txt", sample=SAMPLES, fqtype=["cleaned","aligned","unaligned"]),
         #demultiplex
         expand("fastq/{sample}.{read}.fastq.gz", sample=SAMPLES, read=["r1","r2"]),
         #alignment
         expand("alignment/{sample}.bam", sample=SAMPLES),
-        expand("alignment/unaligned-{sample}_{r}.fastq.gz", sample=SAMPLES, r=[1,2]),
         #coverage
         expand("coverage/{counttype}/{sample}-mnase-{readtype}-{counttype}.bedgraph", sample=SAMPLES, readtype=["midpoint","wholefrag"], counttype=COUNTTYPES),
         expand("coverage/{norm}/{sample}-mnase-{readtype}-{norm}.bedgraph", norm=NORMS, sample=SAMPLES, readtype=["midpoint","wholefrag"]),
         expand("coverage/{norm}/{sample}-mnase-midpoint_smoothed-{norm}.bw", norm=NORMS, sample=SAMPLES),
+        #quality controls
+        expand(expand("qual_ctrl/{{status}}/{condition}-v-{control}-mnase-{{status}}-window-{{windowsize}}-spikenorm-correlations.svg", zip, condition=conditiongroups_si+["all"], control=controlgroups_si+["all"]), status=["all","passing"], windowsize=config["corr-windowsizes"]) + expand(expand("qual_ctrl/{{status}}/{condition}-v-{control}-mnase-{{status}}-window-{{windowsize}}-libsizenorm-correlations.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), status=["all","passing"], windowsize=config["corr-windowsizes"]) if sisamples else expand(expand("qual_ctrl/{{status}}/{condition}-v-{control}-mnase-{{status}}-window-{{windowsize}}-libsizenorm-correlations.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), status=["all","passing"], windowsize=config["corr-windowsizes"]),
         #datavis
-        expand(expand("datavis/{{annotation}}/spikenorm/mnase-{{annotation}}-spikenorm-{{status}}_{condition}-v-{control}-{{readtype}}-{{plot}}-bysample.svg", zip, condition=conditiongroups_si+["all"], control=controlgroups_si+["all"]), annotation=config["annotations"], readtype=["midpoint","wholefrag"], status=["all","passing"], plot=["heatmap","metagene"]) + expand(expand("datavis/{{annotation}}/libsizenorm/mnase-{{annotation}}-libsizenorm-{{status}}_{condition}-v-{control}-{{readtype}}-{{plot}}-bysample.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), annotation=config["annotations"], readtype=["midpoint","wholefrag"], status=["all","passing"], plot=["heatmap", "metagene"]) if sisamples else expand(expand("datavis/{{annotation}}/libsizenorm/mnase-{{annotation}}-libsizenorm-{{status}}_{condition}-v-{control}-{{readtype}}-{{plot}}-bysample.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), annotation=config["annotations"], readtype=["midpoint","wholefrag"], status=["all","passing"], plot=["heatmap","metagene"])
+        # expand(expand("datavis/{{annotation}}/spikenorm/mnase-{{annotation}}-spikenorm-{{status}}_{condition}-v-{control}-{{readtype}}-{{plot}}-bysample.svg", zip, condition=conditiongroups_si+["all"], control=controlgroups_si+["all"]), annotation=config["annotations"], readtype=["midpoint","wholefrag"], status=["all","passing"], plot=["heatmap","metagene"]) + expand(expand("datavis/{{annotation}}/libsizenorm/mnase-{{annotation}}-libsizenorm-{{status}}_{condition}-v-{control}-{{readtype}}-{{plot}}-bysample.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), annotation=config["annotations"], readtype=["midpoint","wholefrag"], status=["all","passing"], plot=["heatmap", "metagene"]) if sisamples else expand(expand("datavis/{{annotation}}/libsizenorm/mnase-{{annotation}}-libsizenorm-{{status}}_{condition}-v-{control}-{{readtype}}-{{plot}}-bysample.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), annotation=config["annotations"], readtype=["midpoint","wholefrag"], status=["all","passing"], plot=["heatmap","metagene"])
 
 def plotcorrsamples(wildcards):
     dd = SAMPLES if wildcards.status=="all" else PASSING
@@ -69,15 +70,15 @@ rule make_barcode_file:
 #fastQC on raw sequencing data
 rule fastqc_raw:
     input:
-       r1 = config["fastq"]["r1"],
-       r2 = config["fastq"]["r2"]
+       fq = lambda wildcards: config["fastq"][wildcards.read],
+       adapters = "fastq/barcodes.tsv"
     output:
-       "qual_ctrl/fastqc/raw"
+       "qual_ctrl/fastqc/raw/{read}/{fname}/fastqc_data.txt"
     threads : config["threads"]
-    log : "logs/fastqc/fastqc-raw.log"
+    log : "logs/fastqc_raw/fastqc_raw-{read}.log"
     shell: """
-        (mkdir -p {output}) &> {log}
-        (fastqc -o {output} --noextract -t {threads} {input.r1} {input.r2}) &>> {log}
+        (mkdir -p qual_ctrl/fastqc/raw/{wildcards.read}) &> {log}
+        (fastqc -a {input.adapters} --nogroup --extract -t {threads} -o qual_ctrl/fastqc/raw/{wildcards.read} {input.fq}) &>> {log}
         """
 
 #cutadapt doesn't demultiplex paired end, so we use a different script
@@ -105,14 +106,14 @@ rule demultiplex:
 #        - ideally, we would use --nextseq-trim for 2-color quality trimming instead of -q
 #            - however, --nextseq-trim currently doesn't trim read 2
 #    note: the minimum length requirement (trimmed read >= 5nt) is to sanitize the output for bowtie 1
-#    note: the maximum length requirement is discard reads in which the barcode isn't found in read 2
+#    note: the maximum length requirement is to discard reads in which the barcode isn't found in read 2
 rule cutadapt:
     input:
         r1 = "fastq/{sample}.r1.fastq.gz",
         r2 = "fastq/{sample}.r2.fastq.gz"
     output:
-        r1 = "fastq/cleaned/{sample}-clean.r1.fastq.gz",
-        r2 = "fastq/cleaned/{sample}-clean.r2.fastq.gz"
+        r1 = "fastq/cleaned/{sample}-cleaned.r1.fastq.gz",
+        r2 = "fastq/cleaned/{sample}-cleaned.r2.fastq.gz"
     params:
         qual_cutoff = config["cutadapt"]["qual_cutoff"],
         adapter = lambda wildcards : SAMPLES[wildcards.sample]["barcode"]+"T",
@@ -125,18 +126,35 @@ rule cutadapt:
         """
 
 #fastQC on demultiplexed and cleaned reads
-rule fastqc_cleaned:
+# rule fastqc_cleaned:
+#     input:
+#         r1 = "fastq/cleaned/{sample}-cleaned.r1.fastq.gz",
+#         r2 = "fastq/cleaned/{sample}-cleaned.r2.fastq.gz",
+#         adapters = "fastq/barcodes.tsv"
+#     output:
+#         "qual_ctrl/fastqc/cleaned/{sample}-cleaned.r1_fastqc/fastqc_data.txt",
+#         "qual_ctrl/fastqc/cleaned/{sample}-cleaned.r2_fastqc/fastqc_data.txt"
+#     threads : config["threads"]
+#     log : "logs/fastqc_cleaned/fastqc_cleaned-{sample}.log"
+#     shell: """
+#         (mkdir -p qual_ctrl/fastqc/cleaned) &> {log}
+#         (fastqc -a {input.adapters} --nogroup --extract -t {threads} -o qual_ctrl/fastqc/cleaned {input.r1} {input.r2}) &>> {log}
+#         """
+
+#fastqc for cleaned, aligned, and unaligned reads
+rule fastqc_processed:
     input:
-        r1 = "fastq/cleaned/{sample}-clean.r1.fastq.gz",
-        r2 = "fastq/cleaned/{sample}-clean.r2.fastq.gz"
+        r1 = "fastq/{fqtype}/{sample}-{fqtype}.r1.fastq.gz",
+        r2 = "fastq/{fqtype}/{sample}-{fqtype}.r2.fastq.gz",
+        adapters = "fastq/barcodes.tsv"
     output:
-        "qual_ctrl/fastqc/{sample}/{sample}-clean.r1_fastqc.html",
-        "qual_ctrl/fastqc/{sample}/{sample}-clean.r2_fastqc.html"
-    threads : config["threads"]
-    log : "logs/fastqc/fastqc-cleaned-{sample}.log"
+        "qual_ctrl/fastqc/{fqtype}/{sample}-{fqtype}.r1_fastqc/fastqc_data.txt",
+        "qual_ctrl/fastqc/{fqtype}/{sample}-{fqtype}.r2_fastqc/fastqc_data.txt"
+    threads: config["threads"]
+    log: "logs/fastqc_processed/fastqc_processed-{sample}-{fqtype}.log"
     shell: """
-        (mkdir -p qual_ctrl/fastqc/{wildcards.sample}) &> {log}
-        (fastqc -o qual_ctrl/fastqc/{wildcards.sample} --noextract -t {threads} {input.r1} {input.r2}) &>> {log}
+        (mkdir -p qual_ctrl/fastqc/{wildcards.fqtype}) &> {log}
+        (fastqc -a {input.adapters} --nogroup --extract -t {threads} -o qual_ctrl/fastqc/{wildcards.fqtype} {input.r1} {input.r2}) &>> {log}
         """
 
 rule bowtie_build:
@@ -158,7 +176,7 @@ rule bowtie_build:
 
 #align with Bowtie 1
 #in Christine's paper, Burak uses -m 10 --best
-rule bowtie:
+rule align:
     input:
         expand(config["bowtie"]["index-path"] + "/" + config["combinedgenome"]["name"] + ".{num}.ebwt", num=[1,2,3,4]) if sisamples else expand(config["bowtie"]["index-path"] + "/" + config["genome"]["name"] + ".{num}.ebwt", num=[1,2,3,4]),
         expand(config["bowtie"]["index-path"] + "/" + config["combinedgenome"]["name"] + ".rev.{num}.ebwt", num=[1,2]) if sisamples else expand(config["bowtie"]["index-path"] + "/" + config["genome"]["name"] + ".rev.{num}.ebwt", num=[1,2]),
@@ -172,16 +190,19 @@ rule bowtie:
         max_ins = config["bowtie"]["max_ins"]
     output:
         bam ="alignment/{sample}.bam",
-        unaligned_1 = temp("alignment/unaligned-{sample}_1.fastq"),
-        unaligned_1_gz = "alignment/unaligned-{sample}_1.fastq.gz",
-        unaligned_2 = temp("alignment/unaligned-{sample}_2.fastq"),
-        unaligned_2_gz = "alignment/unaligned-{sample}_2.fastq.gz"
+        aligned_1_gz = "fastq/aligned/{sample}-aligned.r1.fastq.gz",
+        aligned_2_gz = "fastq/aligned/{sample}-aligned.r2.fastq.gz",
+        unaligned_1_gz = "fastq/unaligned/{sample}-unaligned.r1.fastq.gz",
+        unaligned_2_gz = "fastq/unaligned/{sample}-unaligned.r2.fastq.gz",
+        log = "logs/align/align-{sample}.log"
     threads: config["threads"]
-    log:
-       "logs/bowtie/bowtie-align-{sample}.log"
     shell: """
-        (bowtie -v {params.max_mismatch} -I {params.min_ins} -X {params.max_ins} --fr --nomaqround --best -S -p {threads} --un alignment/unaligned-{wildcards.sample}.fastq {params.idx_path}/{params.basename} -1 {input.r1} -2 {input.r2} | samtools view -buh -f 0x2 - | samtools sort -T .{wildcards.sample} -@ {threads} -o {output.bam} -) &> {log}
-        (pigz -fk alignment/unaligned-{wildcards.sample}_1.fastq alignment/unaligned-{wildcards.sample}_2.fastq) &>> {log}
+        (bowtie -v {params.max_mismatch} -I {params.min_ins} -X {params.max_ins} --fr --nomaqround --best -S -p {threads} --al fastq/aligned/{wildcards.sample}-aligned.fastq --un fastq/unaligned/{wildcards.sample}-unaligned.fastq {params.idx_path}/{params.basename} -1 {input.r1} -2 {input.r2} | samtools view -buh -f 0x2 - | samtools sort -T .{wildcards.sample} -@ {threads} -o {output.bam} -) &> {output.log}
+        (pigz -f fastq/*/{wildcards.sample}-*aligned_*.fastq) &>> {output.log}
+        (mv fastq/aligned/{wildcards.sample}-aligned_1.fastq.gz fastq/aligned/{wildcards.sample}-aligned.r1.fastq.gz) &>> {log}
+        (mv fastq/aligned/{wildcards.sample}-aligned_2.fastq.gz fastq/aligned/{wildcards.sample}-aligned.r2.fastq.gz) &>> {log}
+        (mv fastq/unaligned/{wildcards.sample}-unaligned_1.fastq.gz fastq/unaligned/{wildcards.sample}-unaligned.r1.fastq.gz) &>> {log}
+        (mv fastq/unaligned/{wildcards.sample}-unaligned_2.fastq.gz fastq/unaligned/{wildcards.sample}-unaligned.r2.fastq.gz) &>> {log}
         """
 
 #the index is required use region arguments in samtools view to separate the species
@@ -266,16 +287,16 @@ rule normalize:
 rule map_to_windows:
   input:
       bg = "coverage/{norm}/{sample}-mnase-midpoint-{norm}.bedgraph",
-      chrsizes = os.path.splitext(config["genome"]["chrsizes"])[0] + "-STRANDED.tsv",
+      chrsizes = config["genome"]["chrsizes"]
   output:
-      temp("coverage/{norm}/{sample}-mnase-midpoint-window-{windowsize}-coverage-{norm}.bedgraph")
+      temp("coverage/{norm}/{sample}_mnase-midpoint-window-{windowsize}-coverage-{norm}.bedgraph")
   shell: """
-    bedtools makewindows -g {input.chrsizes} -w {wildcards.windowsize} | LC_COLLATE=C sort -k1,1 -k2,2n | bedtools map -a stdin -b {input.bg} -c 4 -o sum > {output.exp}
+    bedtools makewindows -g {input.chrsizes} -w {wildcards.windowsize} | LC_COLLATE=C sort -k1,1 -k2,2n | bedtools map -a stdin -b {input.bg} -c 4 -o sum > {output}
     """
 
 rule join_window_counts:
     input:
-        exp = expand("coverage/{{norm}}/{sample}-mnase-midpoint-window-{{windowsize}}-coverage-{{norm}}.bedgraph", sample=SAMPLES),
+        exp = expand("coverage/{{norm}}/{sample}_mnase-midpoint-window-{{windowsize}}-coverage-{{norm}}.bedgraph", sample=SAMPLES),
     output:
         exp = "coverage/{norm}/union-bedgraph-window-{windowsize}-{norm}.tsv.gz",
     params:

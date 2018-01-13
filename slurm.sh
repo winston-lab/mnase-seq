@@ -1,7 +1,7 @@
 #!/bin/bash
 
-#SBATCH -p short
-#SBATCH -t 12:00:00
+#SBATCH -p medium
+#SBATCH -t 24:00:00
 #SBATCH --mem-per-cpu=4G
 #SBATCH -n 1
 #SBATCH -e snakemake.err
