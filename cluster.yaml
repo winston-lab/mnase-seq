@@ -25,6 +25,11 @@ fastqc_processed:
     time : 60
     mem : 4000
 
+plot_fastqc_summary:
+    time: 15
+    n: 1
+    mem: 10000
+
 align:
     time : 60 
     n : 4
@@ -87,7 +92,7 @@ bg_to_bw:
     time: 15
     mem: 2000
 
-deeptools_matrix:
+compute_matrix:
     time : 15 
     n : 1
     mem : 2000
@@ -101,15 +106,10 @@ cat_matrices:
     time : 30
     mem : 2000
 
-r_heatmaps:
+plot_heatmaps:
     time : 20 
     mem : 10000
 
-r_metagenes:
+plot_metagenes:
     time : 20 
     mem : 10000
-
-meta_oneoff:
-    queue : "priority"
-    time : 719
-    mem : 60000

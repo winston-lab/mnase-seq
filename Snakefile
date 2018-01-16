@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import itertools
 
 configfile: "config.yaml"
 
@@ -32,8 +33,7 @@ localrules: all,
 rule all:
     input:
         #fastqc
-        expand("qual_ctrl/fastqc/raw/{read}/{fname}/fastqc_data.txt", zip, read=["r1", "r2"], fname=[os.path.split(config["fastq"][rr])[1].split(".fastq")[0] + "_fastqc" for rr in ["r1", "r2"]]),
-        expand("qual_ctrl/fastqc/{fqtype}/{sample}-{fqtype}.r1_fastqc/fastqc_data.txt", sample=SAMPLES, fqtype=["cleaned","aligned","unaligned"]),
+        'qual_ctrl/fastqc/per_base_quality.svg',
         #demultiplex
         expand("fastq/{sample}.{read}.fastq.gz", sample=SAMPLES, read=["r1","r2"]),
         #alignment
@@ -43,6 +43,8 @@ rule all:
         expand("coverage/{norm}/{sample}-mnase-{readtype}-{norm}.bedgraph", norm=NORMS, sample=SAMPLES, readtype=["midpoint","wholefrag"]),
         expand("coverage/{norm}/{sample}-mnase-midpoint_smoothed-{norm}.bw", norm=NORMS, sample=SAMPLES),
         #quality controls
+        "qual_ctrl/read_processing-loss.svg",
+        expand("qual_ctrl/{status}/{status}-spikein-plots.svg", status=["all","passing"]) if sisamples else [],
         expand(expand("qual_ctrl/{{status}}/{condition}-v-{control}-mnase-{{status}}-window-{{windowsize}}-spikenorm-correlations.svg", zip, condition=conditiongroups_si+["all"], control=controlgroups_si+["all"]), status=["all","passing"], windowsize=config["corr-windowsizes"]) + expand(expand("qual_ctrl/{{status}}/{condition}-v-{control}-mnase-{{status}}-window-{{windowsize}}-libsizenorm-correlations.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), status=["all","passing"], windowsize=config["corr-windowsizes"]) if sisamples else expand(expand("qual_ctrl/{{status}}/{condition}-v-{control}-mnase-{{status}}-window-{{windowsize}}-libsizenorm-correlations.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), status=["all","passing"], windowsize=config["corr-windowsizes"]),
         #datavis
         # expand(expand("datavis/{{annotation}}/spikenorm/mnase-{{annotation}}-spikenorm-{{status}}_{condition}-v-{control}-{{readtype}}-{{plot}}-bysample.svg", zip, condition=conditiongroups_si+["all"], control=controlgroups_si+["all"]), annotation=config["annotations"], readtype=["midpoint","wholefrag"], status=["all","passing"], plot=["heatmap","metagene"]) + expand(expand("datavis/{{annotation}}/libsizenorm/mnase-{{annotation}}-libsizenorm-{{status}}_{condition}-v-{control}-{{readtype}}-{{plot}}-bysample.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), annotation=config["annotations"], readtype=["midpoint","wholefrag"], status=["all","passing"], plot=["heatmap", "metagene"]) if sisamples else expand(expand("datavis/{{annotation}}/libsizenorm/mnase-{{annotation}}-libsizenorm-{{status}}_{condition}-v-{control}-{{readtype}}-{{plot}}-bysample.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), annotation=config["annotations"], readtype=["midpoint","wholefrag"], status=["all","passing"], plot=["heatmap","metagene"])
@@ -67,20 +69,6 @@ rule make_barcode_file:
             for k,v in SAMPLES.items():
                 out.write(k + '\t' + v["barcode"] + '\n')
 
-#fastQC on raw sequencing data
-rule fastqc_raw:
-    input:
-       fq = lambda wildcards: config["fastq"][wildcards.read],
-       adapters = "fastq/barcodes.tsv"
-    output:
-       "qual_ctrl/fastqc/raw/{read}/{fname}/fastqc_data.txt"
-    threads : config["threads"]
-    log : "logs/fastqc_raw/fastqc_raw-{read}.log"
-    shell: """
-        (mkdir -p qual_ctrl/fastqc/raw/{wildcards.read}) &> {log}
-        (fastqc -a {input.adapters} --nogroup --extract -t {threads} -o qual_ctrl/fastqc/raw/{wildcards.read} {input.fq}) &>> {log}
-        """
-
 #cutadapt doesn't demultiplex paired end, so we use a different script
 #NOTE: as of v1.15, cutadapt now demultiplexes paired end, could try it out
 # this would allow us to throw out reads where adapter isn't found in both reads
@@ -90,14 +78,30 @@ rule demultiplex:
         r2 = config["fastq"]["r2"],
         barcodes = "fastq/barcodes.tsv"
     output:
-        r1 = expand("fastq/{sample}.r1.fastq.gz", sample=SAMPLES),
-        r2 = expand("fastq/{sample}.r2.fastq.gz", sample=SAMPLES)
+        r1 = expand("fastq/{sample}.r1.fastq.gz", sample=["unmatched"] + list(SAMPLES.keys())),
+        r2 = expand("fastq/{sample}.r2.fastq.gz", sample=["unmatched"] + list(SAMPLES.keys()))
     log:
         "logs/demultiplex.log"
     shell: """
        (fastq-multx -B {input.barcodes} -b {input.r1} {input.r2} -o fastq/%.r1.fastq.gz -o fastq/%.r2.fastq.gz ) &> {log}
         """
 # note: fastq-multx only remove the barcode on read 1. The barcode on read 2 is removed with cutadapt.
+
+#fastQC on raw (demultiplexed) sequencing data
+rule fastqc_raw:
+    input:
+        r1 = "fastq/{sample}.r1.fastq.gz",
+        r2 = "fastq/{sample}.r2.fastq.gz",
+        adapters = "fastq/barcodes.tsv"
+    output:
+        "qual_ctrl/fastqc/raw/{sample}.r1_fastqc/fastqc_data.txt",
+        "qual_ctrl/fastqc/raw/{sample}.r2_fastqc/fastqc_data.txt",
+    threads : config["threads"]
+    log : "logs/fastqc_raw/fastqc_raw-{sample}.log"
+    shell: """
+        (mkdir -p qual_ctrl/fastqc/raw) &> {log}
+        (fastqc -a {input.adapters} --nogroup --extract -t {threads} -o qual_ctrl/fastqc/raw {input.r1} {input.r2}) &>> {log}
+        """
 
 # cutadapt:
 #    remove barcode from read 2
@@ -113,49 +117,53 @@ rule cutadapt:
         r2 = "fastq/{sample}.r2.fastq.gz"
     output:
         r1 = "fastq/cleaned/{sample}-cleaned.r1.fastq.gz",
-        r2 = "fastq/cleaned/{sample}-cleaned.r2.fastq.gz"
+        r2 = "fastq/cleaned/{sample}-cleaned.r2.fastq.gz",
+        log = "logs/cutadapt/cutadapt-{sample}.log"
     params:
         qual_cutoff = config["cutadapt"]["qual_cutoff"],
         adapter = lambda wildcards : SAMPLES[wildcards.sample]["barcode"]+"T",
-        max_len = lambda wildcards: config["read-length"] - len(SAMPLES[wildcards.sample]["barcode"]+"T")
+        max_len = lambda wildcards: config["read-length"] - len(SAMPLES[wildcards.sample]["barcode"]+"T"),
     # threads: config["threads"]
-    log:
-        "logs/cutadapt/cutadapt-{sample}.log"
     shell: """
-        (cutadapt -e 0.15 -u 1 -G ^{params.adapter} -q {params.qual_cutoff} --minimum-length 5 --maximum-length {params.max_len} -o {output.r1} -p {output.r2} {input.r1} {input.r2}) &> {log}
+        (cutadapt -e 0.15 -u 1 -G ^{params.adapter} -q {params.qual_cutoff} --minimum-length 5 --maximum-length {params.max_len} -o {output.r1} -p {output.r2} {input.r1} {input.r2}) &> {output.log}
         """
-
-#fastQC on demultiplexed and cleaned reads
-# rule fastqc_cleaned:
-#     input:
-#         r1 = "fastq/cleaned/{sample}-cleaned.r1.fastq.gz",
-#         r2 = "fastq/cleaned/{sample}-cleaned.r2.fastq.gz",
-#         adapters = "fastq/barcodes.tsv"
-#     output:
-#         "qual_ctrl/fastqc/cleaned/{sample}-cleaned.r1_fastqc/fastqc_data.txt",
-#         "qual_ctrl/fastqc/cleaned/{sample}-cleaned.r2_fastqc/fastqc_data.txt"
-#     threads : config["threads"]
-#     log : "logs/fastqc_cleaned/fastqc_cleaned-{sample}.log"
-#     shell: """
-#         (mkdir -p qual_ctrl/fastqc/cleaned) &> {log}
-#         (fastqc -a {input.adapters} --nogroup --extract -t {threads} -o qual_ctrl/fastqc/cleaned {input.r1} {input.r2}) &>> {log}
-#         """
 
 #fastqc for cleaned, aligned, and unaligned reads
 rule fastqc_processed:
     input:
-        r1 = "fastq/{fqtype}/{sample}-{fqtype}.r1.fastq.gz",
-        r2 = "fastq/{fqtype}/{sample}-{fqtype}.r2.fastq.gz",
-        adapters = "fastq/barcodes.tsv"
+        "fastq/{fqtype}/{sample}-{fqtype}.{read}.fastq.gz",
+    params:
+        adapter= lambda wildcards: SAMPLES[wildcards.sample]["barcode"]
     output:
-        "qual_ctrl/fastqc/{fqtype}/{sample}-{fqtype}.r1_fastqc/fastqc_data.txt",
-        "qual_ctrl/fastqc/{fqtype}/{sample}-{fqtype}.r2_fastqc/fastqc_data.txt"
+        "qual_ctrl/fastqc/{fqtype}/{sample}-{fqtype}.{read}_fastqc/fastqc_data.txt",
     threads: config["threads"]
     log: "logs/fastqc_processed/fastqc_processed-{sample}-{fqtype}.log"
     shell: """
         (mkdir -p qual_ctrl/fastqc/{wildcards.fqtype}) &> {log}
-        (fastqc -a {input.adapters} --nogroup --extract -t {threads} -o qual_ctrl/fastqc/{wildcards.fqtype} {input.r1} {input.r2}) &>> {log}
+        (fastqc -a <(echo -e "adapter\t{params.adapter}") --nogroup --extract -t {threads} -o qual_ctrl/fastqc/{wildcards.fqtype} {input}) &>> {log}
         """
+
+rule read_processing_numbers:
+    input:
+        adapter = expand("logs/cutadapt/cutadapt-{sample}.log", sample=SAMPLES),
+        align = expand("logs/align/align-{sample}.log", sample=SAMPLES),
+    output:
+        "qual_ctrl/read_processing_summary.tsv"
+    log: "logs/read_processing_summary.log"
+    run:
+        shell("""(echo -e "sample\traw\tcleaned\tmapped" > {output}) &> {log}""")
+        for sample, adapter, align in zip(SAMPLES.keys(), input.adapter, input.align):
+            shell("""(grep -e "Total read pairs processed:" -e "Pairs written" {adapter} | cut -d: -f2 | sed 's/,//g' | awk 'BEGIN{{ORS="\t"; print "{sample}"}}{{print $1}}' >> {output}) &> {log}""")
+            shell("""(grep -e "^Reported" {align} | awk '{{print $2}}' >> {output}) &> {log}""")
+
+rule plot_read_processing:
+    input:
+        "qual_ctrl/read_processing_summary.tsv"
+    output:
+        surv_abs_out = "qual_ctrl/read_processing-survival-absolute.svg",
+        surv_rel_out = "qual_ctrl/read_processing-survival-relative.svg",
+        loss_out  = "qual_ctrl/read_processing-loss.svg",
+    script: "scripts/processing_summary.R"
 
 rule bowtie_build:
     input:
@@ -180,8 +188,8 @@ rule align:
     input:
         expand(config["bowtie"]["index-path"] + "/" + config["combinedgenome"]["name"] + ".{num}.ebwt", num=[1,2,3,4]) if sisamples else expand(config["bowtie"]["index-path"] + "/" + config["genome"]["name"] + ".{num}.ebwt", num=[1,2,3,4]),
         expand(config["bowtie"]["index-path"] + "/" + config["combinedgenome"]["name"] + ".rev.{num}.ebwt", num=[1,2]) if sisamples else expand(config["bowtie"]["index-path"] + "/" + config["genome"]["name"] + ".rev.{num}.ebwt", num=[1,2]),
-        r1 = "fastq/cleaned/{sample}-clean.r1.fastq.gz",
-        r2 = "fastq/cleaned/{sample}-clean.r2.fastq.gz"
+        r1 = "fastq/cleaned/{sample}-cleaned.r1.fastq.gz",
+        r2 = "fastq/cleaned/{sample}-cleaned.r2.fastq.gz"
     params:
         idx_path = config["bowtie"]["index-path"],
         basename = config["combinedgenome"]["name"] if sisamples else config["genome"]["name"],
@@ -199,11 +207,67 @@ rule align:
     shell: """
         (bowtie -v {params.max_mismatch} -I {params.min_ins} -X {params.max_ins} --fr --nomaqround --best -S -p {threads} --al fastq/aligned/{wildcards.sample}-aligned.fastq --un fastq/unaligned/{wildcards.sample}-unaligned.fastq {params.idx_path}/{params.basename} -1 {input.r1} -2 {input.r2} | samtools view -buh -f 0x2 - | samtools sort -T .{wildcards.sample} -@ {threads} -o {output.bam} -) &> {output.log}
         (pigz -f fastq/*/{wildcards.sample}-*aligned_*.fastq) &>> {output.log}
-        (mv fastq/aligned/{wildcards.sample}-aligned_1.fastq.gz fastq/aligned/{wildcards.sample}-aligned.r1.fastq.gz) &>> {log}
-        (mv fastq/aligned/{wildcards.sample}-aligned_2.fastq.gz fastq/aligned/{wildcards.sample}-aligned.r2.fastq.gz) &>> {log}
-        (mv fastq/unaligned/{wildcards.sample}-unaligned_1.fastq.gz fastq/unaligned/{wildcards.sample}-unaligned.r1.fastq.gz) &>> {log}
-        (mv fastq/unaligned/{wildcards.sample}-unaligned_2.fastq.gz fastq/unaligned/{wildcards.sample}-unaligned.r2.fastq.gz) &>> {log}
+        (mv fastq/aligned/{wildcards.sample}-aligned_1.fastq.gz fastq/aligned/{wildcards.sample}-aligned.r1.fastq.gz) &>> {output.log}
+        (mv fastq/aligned/{wildcards.sample}-aligned_2.fastq.gz fastq/aligned/{wildcards.sample}-aligned.r2.fastq.gz) &>> {output.log}
+        (mv fastq/unaligned/{wildcards.sample}-unaligned_1.fastq.gz fastq/unaligned/{wildcards.sample}-unaligned.r1.fastq.gz) &>> {output.log}
+        (mv fastq/unaligned/{wildcards.sample}-unaligned_2.fastq.gz fastq/unaligned/{wildcards.sample}-unaligned.r2.fastq.gz) &>> {output.log}
         """
+
+rule fastqc_aggregate:
+    input:
+        raw = expand("qual_ctrl/fastqc/raw/{sample}.{read}_fastqc/fastqc_data.txt", sample=["unmatched"] + list(SAMPLES.keys()), read=["r1", "r2"]),
+        cleaned = expand("qual_ctrl/fastqc/cleaned/{sample}-cleaned.{read}_fastqc/fastqc_data.txt", sample=SAMPLES, read=["r1","r2"]),
+        aligned = expand("qual_ctrl/fastqc/aligned/{sample}-aligned.{read}_fastqc/fastqc_data.txt", sample=SAMPLES, read=["r1","r2"]),
+        unaligned = expand("qual_ctrl/fastqc/unaligned/{sample}-unaligned.{read}_fastqc/fastqc_data.txt", sample=SAMPLES, read=["r1","r2"]),
+    output:
+        'qual_ctrl/fastqc/per_base_quality.tsv',
+        'qual_ctrl/fastqc/per_tile_quality.tsv',
+        'qual_ctrl/fastqc/per_sequence_quality.tsv',
+        'qual_ctrl/fastqc/per_base_sequence_content.tsv',
+        'qual_ctrl/fastqc/per_sequence_gc.tsv',
+        'qual_ctrl/fastqc/per_base_n.tsv',
+        'qual_ctrl/fastqc/sequence_length_distribution.tsv',
+        'qual_ctrl/fastqc/sequence_duplication_levels.tsv',
+        'qual_ctrl/fastqc/adapter_content.tsv',
+        'qual_ctrl/fastqc/kmer_content.tsv'
+    run:
+        shell("rm -f {output}")
+        #for each statistic
+        for outpath, stat, header in zip(output, ["Per base sequence quality", "Per tile sequence quality", "Per sequence quality scores", "Per base sequence content", "Per sequence GC content", "Per base N content", "Sequence Length Distribution", "Total Deduplicated Percentage", "Adapter Content", "Kmer Content"], ["base\tmean\tmedian\tlower_quartile\tupper_quartile\tten_pct\tninety_pct\tsample\tstatus", "tile\tbase\tmean\tsample\tstatus",
+        "quality\tcount\tsample\tstatus", "base\tg\ta\tt\tc\tsample\tstatus", "gc_content\tcount\tsample\tstatus", "base\tn_count\tsample\tstatus", "length\tcount\tsample\tstatus", "duplication_level\tpct_of_deduplicated\tpct_of_total\tsample\tstatus", "position\tpct\tsample\tstatus",
+        "sequence\tcount\tpval\tobs_over_exp_max\tmax_position\tsample\tstatus" ]):
+            for input_type in ["raw", "cleaned", "aligned", "unaligned"]:
+                sample_id_list = ["_".join(x) for x in itertools.product(["unmatched"]+list(SAMPLES.keys()), ["r1", "r2"])] if input_type=="raw" else ["_".join(x) for x in itertools.product(SAMPLES.keys(), ["r1", "r2"])]
+                for sample_id, fqc in zip(sample_id_list, input[input_type]):
+                    if sample_id in ["unmatched_r1", "unmatched_r2"] and stat=="Adapter Content":
+                        shell("""awk 'BEGIN{{FS=OFS="\t"}} /{stat}/{{flag=1;next}}/>>END_MODULE/{{flag=0}} flag {{m=$2;for(i=2;i<=NF-2;i++)if($i>m)m=$i; print $1, m, "{sample_id}", "{input_type}"}}' {fqc} | tail -n +2 >> {outpath}""")
+                    else:
+                        shell("""awk 'BEGIN{{FS=OFS="\t"}} /{stat}/{{flag=1;next}}/>>END_MODULE/{{flag=0}} flag {{print $0, "{sample_id}", "{input_type}"}}' {fqc} | tail -n +2 >> {outpath}""")
+            shell("""sed -i "1i {header}" {outpath}""")
+
+rule plot_fastqc_summary:
+    input:
+        seq_len_dist = 'qual_ctrl/fastqc/sequence_length_distribution.tsv',
+        per_tile = 'qual_ctrl/fastqc/per_tile_quality.tsv',
+        per_base_qual = 'qual_ctrl/fastqc/per_base_quality.tsv',
+        per_base_seq = 'qual_ctrl/fastqc/per_base_sequence_content.tsv',
+        per_base_n = 'qual_ctrl/fastqc/per_base_n.tsv',
+        per_seq_gc = 'qual_ctrl/fastqc/per_sequence_gc.tsv',
+        per_seq_qual = 'qual_ctrl/fastqc/per_sequence_quality.tsv',
+        adapter_content = 'qual_ctrl/fastqc/adapter_content.tsv',
+        seq_dup = 'qual_ctrl/fastqc/sequence_duplication_levels.tsv',
+        kmer = 'qual_ctrl/fastqc/kmer_content.tsv'
+    output:
+        seq_len_dist = 'qual_ctrl/fastqc/sequence_length_distribution.svg',
+        per_tile = 'qual_ctrl/fastqc/per_tile_quality.svg',
+        per_base_qual = 'qual_ctrl/fastqc/per_base_quality.svg',
+        per_base_seq = 'qual_ctrl/fastqc/per_base_sequence_content.svg',
+        per_seq_gc = 'qual_ctrl/fastqc/per_sequence_gc.svg',
+        per_seq_qual = 'qual_ctrl/fastqc/per_sequence_quality.svg',
+        adapter_content = 'qual_ctrl/fastqc/adapter_content.svg',
+        seq_dup = 'qual_ctrl/fastqc/sequence_duplication_levels.svg',
+        kmer = 'qual_ctrl/fastqc/kmer_content.svg',
+    script: "scripts/fastqc_summary.R"
 
 #the index is required use region arguments in samtools view to separate the species
 rule samtools_index:
@@ -256,6 +320,32 @@ rule midpoint_coverage:
     shell: """
         (awk 'BEGIN{{FS=OFS="\t"}} {{width=$6-$2}} {{(width % 2 != 0)? (mid=(width+1)/2+$2) : ((rand()<0.5)? (mid=width/2+$2) : (mid=width/2+$2+1))}} {{print $1, mid, mid+1, $7}}' {input.bedpe} | sort -k1,1 -k2,2n | bedtools genomecov -i stdin -g {input.chrsizes} -bga | sort -k1,1 -k2,2n > {output}) &> {log}
         """
+
+rule get_si_pct:
+    input:
+        plmin = expand("coverage/counts/{sample}-mnase-midpoint-counts.bedgraph", sample=sisamples),
+        SIplmin = expand("coverage/sicounts/{sample}-mnase-midopint-sicounts.bedgraph", sample=sisamples)
+    params:
+        group = [v["group"] for k,v in sisamples.items()]
+    output:
+        "qual_ctrl/all/spikein-counts.tsv"
+    log: "logs/get_si_pct.log"
+    run:
+        shell("rm -f {output}")
+        for name, exp, si, g in zip(sisamples.keys(), input.plmin, input.SIplmin, params.group):
+            shell("""(echo -e "{name}\t{g}\t" $(awk 'BEGIN{{FS=OFS="\t"; ex=0; si=0}}{{if(NR==FNR){{si+=$4}} else{{ex+=$4}}}} END{{print ex+si, ex, si}}' {si} {exp}) >> {output}) &> {log}""")
+
+rule plot_si_pct:
+    input:
+        "qual_ctrl/all/spikein-counts.tsv"
+    output:
+        plot = "qual_ctrl/{status}/{status}-spikein-plots.svg",
+        stats = "qual_ctrl/{status}/{status}-spikein-stats.tsv"
+    params:
+        samplelist = lambda wildcards : [k for k,v in sisamples.items() if v["spikein"]=="y"] if wildcards.status=="all" else [k for k,v in sipassing.items() if v["spikein"]=="y"],
+        conditions = config["comparisons"]["spikenorm"]["conditions"],
+        controls = config["comparisons"]["spikenorm"]["controls"],
+    script: "scripts/plotsipct.R"
 
 rule whole_fragment_coverage:
     input:
@@ -340,7 +430,7 @@ rule smoothed_midpoint_coverage:
         (python scripts/smooth_midpoint_coverage.py -b {params.bandwidth} -i {input} -o {output}) &> {log}
         """
 
-rule deeptools_matrix:
+rule compute_matrix:
     input:
         annotation = lambda wildcards: config["annotations"][wildcards.annotation]["path"],
         bw = "coverage/{norm}/{sample}-mnase-{readtype}-{norm}.bw"
@@ -387,7 +477,7 @@ rule cat_matrices:
         (cat {input} > {output}) &> {log}
         """
 
-rule r_heatmaps:
+rule plot_heatmaps:
     input:
         matrix = "datavis/{annotation}/{norm}/allsamples-{annotation}-{readtype}-{norm}.tsv.gz"
     output:
@@ -406,7 +496,7 @@ rule r_heatmaps:
     script:
         "scripts/plot_mnase_heatmaps.R"
 
-rule r_metagenes:
+rule plot_metagenes:
     input:
         qfrags =  "datavis/{annotation}/{norm}/allsamples-{annotation}-{readtype}-{norm}.tsv.gz"
     output:
