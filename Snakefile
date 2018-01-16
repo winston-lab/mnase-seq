@@ -324,7 +324,7 @@ rule midpoint_coverage:
 rule get_si_pct:
     input:
         plmin = expand("coverage/counts/{sample}-mnase-midpoint-counts.bedgraph", sample=sisamples),
-        SIplmin = expand("coverage/sicounts/{sample}-mnase-midopint-sicounts.bedgraph", sample=sisamples)
+        SIplmin = expand("coverage/sicounts/{sample}-mnase-midpoint-sicounts.bedgraph", sample=sisamples)
     params:
         group = [v["group"] for k,v in sisamples.items()]
     output:
