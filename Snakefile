@@ -98,11 +98,16 @@ rule fastqc_raw:
         "qual_ctrl/fastqc/raw/{sample}.r2_fastqc/fastqc_data.txt",
     threads : config["threads"]
     log : "logs/fastqc_raw/fastqc_raw-{sample}.log"
-    shell: """
-        (mkdir -p qual_ctrl/fastqc/raw) &> {log}
-        (fastqc -a {input.adapters} --nogroup --extract -t {threads} -o qual_ctrl/fastqc/raw {input.r1}) &>> {log}
-        (fastqc -a {input.adapters} --nogroup --extract -t {threads} -o qual_ctrl/fastqc/raw {input.r2}) &>> {log}
-        """
+    run:
+        if wildcards.sample=="unmatched":
+            shell("""(mkdir -p qual_ctrl/fastqc/raw) &> {log};
+                    (fastqc -a {input.adapters} --nogroup --extract -t {threads} -o qual_ctrl/fastqc/raw {input.r1}) &>> {log};
+                    (fastqc -a {input.adapters} --nogroup --extract -t {threads} -o qual_ctrl/fastqc/raw {input.r2}) &>> {log}""")
+        else:
+            adapter = SAMPLES[wildcards.sample]["barcode"]
+            shell("""(mkdir -p qual_ctrl/fastqc/raw) &> {log};
+                    (fastqc -a <(echo -e "adapter\t{adapter}") --nogroup --extract -t {threads} -o qual_ctrl/fastqc/raw {input.r1}) &>> {log};
+                    (fastqc -a <(echo -e "adapter\t{adapter}") --nogroup --extract -t {threads} -o qual_ctrl/fastqc/raw {input.r2}) &>> {log}""")
 
 # cutadapt:
 #    remove barcode from read 2
