@@ -42,7 +42,7 @@ main = function(in_table, surv_abs_out, surv_rel_out, loss_out){
     #some hacking to get a survival-curve like thing
     #TODO: make the color fill the AUC?
     survival = df %>% mutate(dummy=raw) %>% 
-        select(sample, dummy, 2:6) %>% 
+        select(sample, dummy, 2:4) %>% 
         gather(step, count, -sample, factor_key=TRUE) %>% 
         mutate_at(vars(step), as.numeric)
     
