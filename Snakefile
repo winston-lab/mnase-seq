@@ -100,7 +100,8 @@ rule fastqc_raw:
     log : "logs/fastqc_raw/fastqc_raw-{sample}.log"
     shell: """
         (mkdir -p qual_ctrl/fastqc/raw) &> {log}
-        (fastqc -a {input.adapters} --nogroup --extract -t {threads} -o qual_ctrl/fastqc/raw {input.r1} {input.r2}) &>> {log}
+        (fastqc -a {input.adapters} --nogroup --extract -t {threads} -o qual_ctrl/fastqc/raw {input.r1}) &>> {log}
+        (fastqc -a {input.adapters} --nogroup --extract -t {threads} -o qual_ctrl/fastqc/raw {input.r2}) &>> {log}
         """
 
 # cutadapt:
