@@ -129,18 +129,22 @@ rule cutadapt:
         """
 
 #fastqc for cleaned, aligned, and unaligned reads
+#do the two reads sequentially to avoid fastqc bugs and problems with protected files (writing to same directory)
 rule fastqc_processed:
     input:
-        "fastq/{fqtype}/{sample}-{fqtype}.{read}.fastq.gz",
+        r1 = "fastq/{fqtype}/{sample}-{fqtype}.r1.fastq.gz",
+        r2 = "fastq/{fqtype}/{sample}-{fqtype}.r2.fastq.gz",
     params:
         adapter= lambda wildcards: SAMPLES[wildcards.sample]["barcode"]
     output:
-        "qual_ctrl/fastqc/{fqtype}/{sample}-{fqtype}.{read}_fastqc/fastqc_data.txt",
+        "qual_ctrl/fastqc/{fqtype}/{sample}-{fqtype}.r1_fastqc/fastqc_data.txt",
+        "qual_ctrl/fastqc/{fqtype}/{sample}-{fqtype}.r2_fastqc/fastqc_data.txt",
     threads: config["threads"]
     log: "logs/fastqc_processed/fastqc_processed-{sample}-{fqtype}.log"
     shell: """
         (mkdir -p qual_ctrl/fastqc/{wildcards.fqtype}) &> {log}
-        (fastqc -a <(echo -e "adapter\t{params.adapter}") --nogroup --extract -t {threads} -o qual_ctrl/fastqc/{wildcards.fqtype} {input}) &>> {log}
+        (fastqc -a <(echo -e "adapter\t{params.adapter}") --nogroup --extract -t {threads} -o qual_ctrl/fastqc/{wildcards.fqtype} {input.r1}) &>> {log}
+        (fastqc -a <(echo -e "adapter\t{params.adapter}") --nogroup --extract -t {threads} -o qual_ctrl/fastqc/{wildcards.fqtype} {input.r2}) &>> {log}
         """
 
 rule read_processing_numbers:
