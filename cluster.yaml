@@ -39,6 +39,11 @@ bam_separate_species:
     time: 15 
     mem: 2000
 
+get_fragment_lengths:
+    time: 60
+    n: 4
+    mem: 4000
+
 get_fragments:
     time : 45 
     n : 2
@@ -94,11 +99,6 @@ bg_to_bw:
 
 compute_matrix:
     time : 15 
-    n : 1
-    mem : 2000
-
-melt_matrix:
-    time : 10
     n : 1
     mem : 2000
 

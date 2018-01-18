@@ -44,10 +44,13 @@ rule all:
         expand("coverage/{norm}/{sample}-mnase-midpoint_smoothed-{norm}.bw", norm=NORMS, sample=SAMPLES),
         #quality controls
         "qual_ctrl/read_processing-loss.svg",
+        "qual_ctrl/all/fragment_length_distributions.tsv",
         expand("qual_ctrl/{status}/{status}-spikein-plots.svg", status=["all","passing"]) if sisamples else [],
         expand(expand("qual_ctrl/{{status}}/{condition}-v-{control}-mnase-{{status}}-window-{{windowsize}}-spikenorm-correlations.svg", zip, condition=conditiongroups_si+["all"], control=controlgroups_si+["all"]), status=["all","passing"], windowsize=config["corr-windowsizes"]) + expand(expand("qual_ctrl/{{status}}/{condition}-v-{control}-mnase-{{status}}-window-{{windowsize}}-libsizenorm-correlations.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), status=["all","passing"], windowsize=config["corr-windowsizes"]) if sisamples else expand(expand("qual_ctrl/{{status}}/{condition}-v-{control}-mnase-{{status}}-window-{{windowsize}}-libsizenorm-correlations.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), status=["all","passing"], windowsize=config["corr-windowsizes"]),
         #datavis
-        # expand(expand("datavis/{{annotation}}/spikenorm/mnase-{{annotation}}-spikenorm-{{status}}_{condition}-v-{control}-{{readtype}}-{{plot}}-bysample.svg", zip, condition=conditiongroups_si+["all"], control=controlgroups_si+["all"]), annotation=config["annotations"], readtype=["midpoint","wholefrag"], status=["all","passing"], plot=["heatmap","metagene"]) + expand(expand("datavis/{{annotation}}/libsizenorm/mnase-{{annotation}}-libsizenorm-{{status}}_{condition}-v-{control}-{{readtype}}-{{plot}}-bysample.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), annotation=config["annotations"], readtype=["midpoint","wholefrag"], status=["all","passing"], plot=["heatmap", "metagene"]) if sisamples else expand(expand("datavis/{{annotation}}/libsizenorm/mnase-{{annotation}}-libsizenorm-{{status}}_{condition}-v-{control}-{{readtype}}-{{plot}}-bysample.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), annotation=config["annotations"], readtype=["midpoint","wholefrag"], status=["all","passing"], plot=["heatmap","metagene"])
+        expand(expand("datavis/{{annotation}}/spikenorm/mnase-{{annotation}}-spikenorm-{{status}}_{condition}-v-{control}_{{readtype}}-{{plot}}-bysample.svg", zip, condition=conditiongroups_si+["all"], control=controlgroups_si+["all"]), annotation=config["annotations"], readtype=["midpoint","wholefrag"], status=["all","passing"], plot=["heatmap","metagene"]) +
+        expand(expand("datavis/{{annotation}}/libsizenorm/mnase-{{annotation}}-libsizenorm-{{status}}_{condition}-v-{control}_{{readtype}}-{{plot}}-bysample.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), annotation=config["annotations"], readtype=["midpoint","wholefrag"], status=["all","passing"], plot=["heatmap", "metagene"]) if sisamples else
+        expand(expand("datavis/{{annotation}}/libsizenorm/mnase-{{annotation}}-libsizenorm-{{status}}_{condition}-v-{control}_{{readtype}}-{{plot}}-bysample.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), annotation=config["annotations"], readtype=["midpoint","wholefrag"], status=["all","passing"], plot=["heatmap","metagene"])
 
 def plotcorrsamples(wildcards):
     dd = SAMPLES if wildcards.status=="all" else PASSING
@@ -306,6 +309,21 @@ rule bam_separate_species:
         (samtools view -h {input.bam} $(grep {wildcards.species} {input.chrsizes} | awk 'BEGIN{{FS="\t"; ORS=" "}}{{print $1}}') | grep -v -e 'SN:{params.filterprefix}' | sed 's/{wildcards.species}//g' | samtools view -bh -@ {threads} -o {output} -) &> {log}
         """
 
+rule get_fragment_lengths:
+    input:
+        expand("alignment/{sample}_{species}only.bam", sample=SAMPLES, species=config["combinedgenome"]["experimental_prefix"])
+    params:
+        header = "\t".join(["fragsize"] + list(SAMPLES.keys()))
+    output:
+        "qual_ctrl/all/fragment_length_distributions.tsv"
+    threads: config["threads"]
+    run:
+        bam = input[0]
+        shell("""samtools view {bam} | cut -f9 | sed 's/-//g' | sort -k1,1n -S 50% --parallel {threads} | uniq -c | awk 'BEGIN{{OFS="\t"}}{{print $2, $1}}' > {output}""")
+        for bam in input[1:]:
+            shell("""join -1 1 -2 2 -t $'\t' -e 0 -a 1 -a 2 {output} <(samtools view {bam} | cut -f9 | sed 's/-//g' | sort -k1,1n -S 50% --parallel {threads} | uniq -c | awk 'BEGIN{{OFS="\t"}}{{print $1, $2}}') > qual_ctrl/all/.frag_length.temp; mv qual_ctrl/all/.frag_length.temp {output}""")
+        shell("""sed -i "1i {params.header}" {output}""")
+
 #bam must be sorted by name for bedpe. We don't do this in the bowtie step since samtools index required position-sorted bam.
 rule get_fragments:
     input:
@@ -447,8 +465,9 @@ rule compute_matrix:
     output:
         dtfile = temp("datavis/{annotation}/{norm}/{annotation}-{sample}-{readtype}-{norm}.mat.gz"),
         matrix = temp("datavis/{annotation}/{norm}/{annotation}-{sample}-{readtype}-{norm}.tsv"),
-        matrix_gz  = "datavis/{annotation}/{norm}/{annotation}-{sample}-{readtype}-{norm}.tsv.gz"
+        melted = temp("datavis/{annotation}/{norm}/{annotation}-{sample}-{readtype}-{norm}-melted.tsv.gz")
     params:
+        group = lambda wildcards : SAMPLES[wildcards.sample]["group"],
         refpoint = lambda wildcards: config["annotations"][wildcards.annotation]["refpoint"],
         upstream = lambda wildcards: config["annotations"][wildcards.annotation]["upstream"] + config["annotations"][wildcards.annotation]["binsize"],
         dnstream = lambda wildcards: config["annotations"][wildcards.annotation]["dnstream"] + config["annotations"][wildcards.annotation]["binsize"],
@@ -457,25 +476,14 @@ rule compute_matrix:
         sortusing = lambda wildcards: config["annotations"][wildcards.annotation]["sortby"],
         binstat = lambda wildcards: config["annotations"][wildcards.annotation]["binstat"]
     threads : config["threads"]
-    log: "logs/deeptools/computeMatrix-{annotation}-{sample}-{readtype}-{norm}.log"
+    log: "logs/compute_matrix/compute_matrix-{annotation}-{sample}-{readtype}-{norm}.log"
     run:
         if config["annotations"][wildcards.annotation]["nan_afterend"]=="y":
             shell("(computeMatrix reference-point -R {input.annotation} -S {input.bw} --referencePoint {params.refpoint} -out {output.dtfile} --outFileNameMatrix {output.matrix} -b {params.upstream} -a {params.dnstream} --nanAfterEnd --binSize {params.binsize} --sortRegions {params.sort} --sortUsing {params.sortusing} --averageTypeBins {params.binstat} -p {threads}; pigz -fk {output.matrix}) &> {log}")
         else:
             shell("(computeMatrix reference-point -R {input.annotation} -S {input.bw} --referencePoint {params.refpoint} -out {output.dtfile} --outFileNameMatrix {output.matrix} -b {params.upstream} -a {params.dnstream} --binSize {params.binsize} --sortRegions {params.sort} --sortUsing {params.sortusing} --averageTypeBins {params.binstat} -p {threads}; pigz -fk {output.matrix}) &> {log}")
-
-rule melt_matrix:
-    input:
-        matrix = "datavis/{annotation}/{norm}/{annotation}-{sample}-{readtype}-{norm}.tsv.gz"
-    output:
-        temp("datavis/{annotation}/{norm}/{annotation}-{sample}-{readtype}-{norm}-melted.tsv.gz")
-    params:
-        refpoint = lambda wildcards: config["annotations"][wildcards.annotation]["refpoint"],
-        group = lambda wildcards : SAMPLES[wildcards.sample]["group"],
-        binsize = lambda wildcards : config["annotations"][wildcards.annotation]["binsize"],
-        upstream = lambda wildcards : config["annotations"][wildcards.annotation]["upstream"],
-    script:
-        "scripts/melt_matrix.R"
+        melt_upstream = params.upstream-params.binsize
+        shell("""(Rscript scripts/melt_matrix.R -i {output.matrix} -r {params.refpoint} --group {params.group} -s {wildcards.sample} -b {params.binsize} -u {melt_upstream} -o {output.melted}) &>> {log}""")
 
 rule cat_matrices:
     input:
@@ -491,8 +499,8 @@ rule plot_heatmaps:
     input:
         matrix = "datavis/{annotation}/{norm}/allsamples-{annotation}-{readtype}-{norm}.tsv.gz"
     output:
-        heatmap_sample = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}-{readtype}-heatmap-bysample.svg",
-        heatmap_group = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}-{readtype}-heatmap-bygroup.svg",
+        heatmap_sample = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}_{readtype}-heatmap-bysample.svg",
+        heatmap_group = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}_{readtype}-heatmap-bygroup.svg",
     params:
         samplelist = plotcorrsamples,
         upstream = lambda wildcards : config["annotations"][wildcards.annotation]["upstream"],
@@ -510,11 +518,11 @@ rule plot_metagenes:
     input:
         qfrags =  "datavis/{annotation}/{norm}/allsamples-{annotation}-{readtype}-{norm}.tsv.gz"
     output:
-        pmeta_group = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}-{readtype}-metagene-bygroup.svg",
-        pmeta_sample = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}-{readtype}-metagene-bysample.svg",
-        pmeta_goverlay = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}-{readtype}-metagene-groupoverlay.svg",
-        pmeta_soverlay = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}-{readtype}-metagene-sampleoverlayall.svg",
-        pmeta_soverlay_bygroup = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}-{readtype}-metagene-sampleoverlaybygroup.svg"
+        pmeta_group = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}_{readtype}-metagene-bygroup.svg",
+        pmeta_sample = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}_{readtype}-metagene-bysample.svg",
+        pmeta_goverlay = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}_{readtype}-metagene-groupoverlay.svg",
+        pmeta_soverlay = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}_{readtype}-metagene-sampleoverlayall.svg",
+        pmeta_soverlay_bygroup = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}_{readtype}-metagene-sampleoverlaybygroup.svg"
     params:
         samplelist = plotcorrsamples,
         upstream = lambda wildcards : config["annotations"][wildcards.annotation]["upstream"],

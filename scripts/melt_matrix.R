@@ -1,4 +1,16 @@
+#!/usr/bin/env/ Rscript
+library(optparse)
 library(tidyverse)
+
+option_list = list(make_option(c("-i", "--input")),
+                   make_option(c("-r", "--refpt")),
+                   make_option(c("-g", "--group")),
+                   make_option(c("-s", "--sample")),
+                   make_option(c("-b", "--binsize"), type="integer"),
+                   make_option(c("-u", "--upstream"), type="integer"),
+                   make_option(c("-o", "--output")))
+
+opt = parse_args(OptionParser(option_list=option_list))
 
 melt = function(inmatrix, refpt, group, sample, binsize, upstream, outpath){
     raw = read_tsv(inmatrix, skip=3, col_names=FALSE)
@@ -34,10 +46,10 @@ melt = function(inmatrix, refpt, group, sample, binsize, upstream, outpath){
     return(df)
 }
 
-melt(inmatrix = snakemake@input[["matrix"]],
-     refpt = snakemake@params[["refpoint"]],
-     group = snakemake@params[["group"]],
-     sample = snakemake@wildcards[["sample"]],
-     binsize = snakemake@params[["binsize"]],
-     upstream = snakemake@params[["upstream"]],
-     outpath = snakemake@output[[1]])
+melt(inmatrix = opt$input,
+     refpt = opt$refpt,
+     group = opt$group,
+     sample = opt$sample,
+     binsize = opt$binsize,
+     upstream = opt$upstream,
+     outpath = opt$output)
