@@ -46,11 +46,12 @@ rule all:
         "qual_ctrl/read_processing-loss.svg",
         "qual_ctrl/all/fragment_length_distributions.tsv",
         expand("qual_ctrl/{status}/{status}-spikein-plots.svg", status=["all","passing"]) if sisamples else [],
-        expand(expand("qual_ctrl/{{status}}/{condition}-v-{control}-mnase-{{status}}-window-{{windowsize}}-spikenorm-correlations.svg", zip, condition=conditiongroups_si+["all"], control=controlgroups_si+["all"]), status=["all","passing"], windowsize=config["corr-windowsizes"]) + expand(expand("qual_ctrl/{{status}}/{condition}-v-{control}-mnase-{{status}}-window-{{windowsize}}-libsizenorm-correlations.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), status=["all","passing"], windowsize=config["corr-windowsizes"]) if sisamples else expand(expand("qual_ctrl/{{status}}/{condition}-v-{control}-mnase-{{status}}-window-{{windowsize}}-libsizenorm-correlations.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), status=["all","passing"], windowsize=config["corr-windowsizes"]),
+        expand(expand("qual_ctrl/{{status}}/{condition}-v-{control}/{condition}-v-{control}-mnase-{{status}}-window-{{windowsize}}-spikenorm-correlations.svg", zip, condition=conditiongroups_si+["all"], control=controlgroups_si+["all"]), status=["all","passing"], windowsize=config["corr-windowsizes"]) +
+        expand(expand("qual_ctrl/{{status}}/{condition}-v-{control}/{condition}-v-{control}-mnase-{{status}}-window-{{windowsize}}-libsizenorm-correlations.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), status=["all","passing"], windowsize=config["corr-windowsizes"]) if sisamples else expand(expand("qual_ctrl/{{status}}/{condition}-v-{control}/{condition}-v-{control}-mnase-{{status}}-window-{{windowsize}}-libsizenorm-correlations.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), status=["all","passing"], windowsize=config["corr-windowsizes"]),
         #datavis
-        expand(expand("datavis/{{annotation}}/spikenorm/mnase-{{annotation}}-spikenorm-{{status}}_{condition}-v-{control}_{{readtype}}-{{plot}}-bysample.svg", zip, condition=conditiongroups_si+["all"], control=controlgroups_si+["all"]), annotation=config["annotations"], readtype=["midpoint","wholefrag"], status=["all","passing"], plot=["heatmap","metagene"]) +
-        expand(expand("datavis/{{annotation}}/libsizenorm/mnase-{{annotation}}-libsizenorm-{{status}}_{condition}-v-{control}_{{readtype}}-{{plot}}-bysample.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), annotation=config["annotations"], readtype=["midpoint","wholefrag"], status=["all","passing"], plot=["heatmap", "metagene"]) if sisamples else
-        expand(expand("datavis/{{annotation}}/libsizenorm/mnase-{{annotation}}-libsizenorm-{{status}}_{condition}-v-{control}_{{readtype}}-{{plot}}-bysample.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), annotation=config["annotations"], readtype=["midpoint","wholefrag"], status=["all","passing"], plot=["heatmap","metagene"])
+        expand(expand("datavis/{{annotation}}/spikenorm/{condition}-v-{control}/mnase-{{annotation}}-spikenorm-{{status}}_{condition}-v-{control}_{{readtype}}-{{plot}}-bysample.svg", zip, condition=conditiongroups_si+["all"], control=controlgroups_si+["all"]), annotation=config["annotations"], readtype=["midpoint","wholefrag"], status=["all","passing"], plot=["heatmap","metagene"]) +
+        expand(expand("datavis/{{annotation}}/libsizenorm/{condition}-v-{control}/mnase-{{annotation}}-libsizenorm-{{status}}_{condition}-v-{control}_{{readtype}}-{{plot}}-bysample.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), annotation=config["annotations"], readtype=["midpoint","wholefrag"], status=["all","passing"], plot=["heatmap", "metagene"]) if sisamples else
+        expand(expand("datavis/{{annotation}}/libsizenorm/{condition}-v-{control}/mnase-{{annotation}}-libsizenorm-{{status}}_{condition}-v-{control}_{{readtype}}-{{plot}}-bysample.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), annotation=config["annotations"], readtype=["midpoint","wholefrag"], status=["all","passing"], plot=["heatmap","metagene"])
 
 def plotcorrsamples(wildcards):
     dd = SAMPLES if wildcards.status=="all" else PASSING
@@ -282,7 +283,7 @@ rule plot_fastqc_summary:
         kmer = 'qual_ctrl/fastqc/kmer_content.svg',
     script: "scripts/fastqc_summary.R"
 
-#the index is required use region arguments in samtools view to separate the species
+#the index is required to use region arguments in samtools view to separate the species
 rule samtools_index:
     input:
         "alignment/{sample}.bam"
@@ -428,9 +429,9 @@ rule plotcorrelations:
     input:
         "coverage/{norm}/union-bedgraph-window-{windowsize}-{norm}.tsv.gz"
     output:
-        "qual_ctrl/{status}/{condition}-v-{control}-mnase-{status}-window-{windowsize}-{norm}-correlations.svg"
+        "qual_ctrl/{status}/{condition}-v-{control}/{condition}-v-{control}-mnase-{status}-window-{windowsize}-{norm}-correlations.svg"
     params:
-        pcount = 0.1,
+        pcount = lambda wildcards: 0.01*int(wildcards.windowsize),
         samplelist = plotcorrsamples
     script:
         "scripts/plotcorr.R"
@@ -499,8 +500,8 @@ rule plot_heatmaps:
     input:
         matrix = "datavis/{annotation}/{norm}/allsamples-{annotation}-{readtype}-{norm}.tsv.gz"
     output:
-        heatmap_sample = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}_{readtype}-heatmap-bysample.svg",
-        heatmap_group = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}_{readtype}-heatmap-bygroup.svg",
+        heatmap_sample = "datavis/{annotation}/{norm}/{condition}-v-{control}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}_{readtype}-heatmap-bysample.svg",
+        heatmap_group = "datavis/{annotation}/{norm}/{condition}-v-{control}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}_{readtype}-heatmap-bygroup.svg",
     params:
         samplelist = plotcorrsamples,
         upstream = lambda wildcards : config["annotations"][wildcards.annotation]["upstream"],
@@ -518,11 +519,11 @@ rule plot_metagenes:
     input:
         qfrags =  "datavis/{annotation}/{norm}/allsamples-{annotation}-{readtype}-{norm}.tsv.gz"
     output:
-        pmeta_group = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}_{readtype}-metagene-bygroup.svg",
-        pmeta_sample = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}_{readtype}-metagene-bysample.svg",
-        pmeta_goverlay = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}_{readtype}-metagene-groupoverlay.svg",
-        pmeta_soverlay = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}_{readtype}-metagene-sampleoverlayall.svg",
-        pmeta_soverlay_bygroup = "datavis/{annotation}/{norm}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}_{readtype}-metagene-sampleoverlaybygroup.svg"
+        pmeta_group = "datavis/{annotation}/{norm}/{condition}-v-{control}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}_{readtype}-metagene-bygroup.svg",
+        pmeta_sample = "datavis/{annotation}/{norm}/{condition}-v-{control}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}_{readtype}-metagene-bysample.svg",
+        pmeta_goverlay = "datavis/{annotation}/{norm}/{condition}-v-{control}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}_{readtype}-metagene-groupoverlay.svg",
+        pmeta_soverlay = "datavis/{annotation}/{norm}/{condition}-v-{control}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}_{readtype}-metagene-sampleoverlayall.svg",
+        pmeta_soverlay_bygroup = "datavis/{annotation}/{norm}/{condition}-v-{control}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}_{readtype}-metagene-sampleoverlaybygroup.svg"
     params:
         samplelist = plotcorrsamples,
         upstream = lambda wildcards : config["annotations"][wildcards.annotation]["upstream"],

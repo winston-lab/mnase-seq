@@ -36,11 +36,11 @@ main = function(intable, binsize, pcount, samplelist, outpath){
             else if (i == j){
                 subdf = df %>% select(i) %>% gather(sample, value)
                 plot = ggplot(data = subdf, aes(x=(value+pcount))) +
-                        geom_density(aes(y=..scaled..), fill="black", size=1) +
+                        geom_density(aes(y=..scaled..), color="#114477", size=0.8) +
                         scale_y_continuous(breaks=c(0,.5,1)) +
-                        scale_x_log10(limit = c(pcount, maxsignal)) +
-                        annotate("text", x=.90*maxsignal, y=0.5, hjust=1, 
-                                 label=unique(subdf$sample), size=4, fontface="bold") 
+                        scale_x_log10(limit = c(pcount, maxsignal)) #+
+                        #annotate("text", x=.90*maxsignal, y=0.5, hjust=1, 
+                        #         label=unique(subdf$sample), size=4, fontface="bold") 
                 plots[[idx]] = plot
             }
             #bottom left (scatter)
@@ -49,7 +49,7 @@ main = function(intable, binsize, pcount, samplelist, outpath){
                 #all of the colorspace
                 subdf = df %>% select(i,j) %>% gather(xsample, xvalue, -1) %>%
                             gather(ysample, yvalue, -c(2:3)) %>%
-                            filter(!(xvalue < 6*pcount & yvalue < 6*pcount))
+                            filter(!(xvalue < 2*pcount & yvalue < 2*pcount))
                 plot = ggplot(data = subdf, aes(x=xvalue+pcount, y=yvalue+pcount)) +
                             geom_abline(intercept = 0, slope=1, color="grey80", size=.5) +
                             stat_bin_hex(geom="point", aes(color=log10(..count..)), binwidth=c(.04,.04), size=.5, shape=16, stroke=0) +
