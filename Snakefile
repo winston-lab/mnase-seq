@@ -22,13 +22,7 @@ localrules: all,
             make_barcode_file,
             bowtie_build,
             samtools_index,
-            # build_nucwave_input,
-            # get_fragsizes,
-            # cat_fragsizes,
-            # make_fragments_table,
-            # cat_windows,
-            # cat_perbase_depth,
-            # group_bam_for_danpos,
+            group_bam_for_danpos,
 
 rule all:
     input:
@@ -51,7 +45,10 @@ rule all:
         #datavis
         expand(expand("datavis/{{annotation}}/spikenorm/{condition}-v-{control}/mnase-{{annotation}}-spikenorm-{{status}}_{condition}-v-{control}_{{readtype}}-{{plot}}-bysample.svg", zip, condition=conditiongroups_si+["all"], control=controlgroups_si+["all"]), annotation=config["annotations"], readtype=["midpoint","wholefrag"], status=["all","passing"], plot=["heatmap","metagene"]) +
         expand(expand("datavis/{{annotation}}/libsizenorm/{condition}-v-{control}/mnase-{{annotation}}-libsizenorm-{{status}}_{condition}-v-{control}_{{readtype}}-{{plot}}-bysample.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), annotation=config["annotations"], readtype=["midpoint","wholefrag"], status=["all","passing"], plot=["heatmap", "metagene"]) if sisamples else
-        expand(expand("datavis/{{annotation}}/libsizenorm/{condition}-v-{control}/mnase-{{annotation}}-libsizenorm-{{status}}_{condition}-v-{control}_{{readtype}}-{{plot}}-bysample.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), annotation=config["annotations"], readtype=["midpoint","wholefrag"], status=["all","passing"], plot=["heatmap","metagene"])
+        expand(expand("datavis/{{annotation}}/libsizenorm/{condition}-v-{control}/mnase-{{annotation}}-libsizenorm-{{status}}_{condition}-v-{control}_{{readtype}}-{{plot}}-bysample.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), annotation=config["annotations"], readtype=["midpoint","wholefrag"], status=["all","passing"], plot=["heatmap","metagene"]),
+        #call nucleosomes 
+        expand("nucleosome_calling/{condition}-v-{control}/reference_positions.xls", zip, condition=conditiongroups, control=controlgroups),
+        expand("nucleosome_calling/{condition}-v-{control}/{condition}-v-{control}_dyad-shift-histogram.svg", zip, condition=conditiongroups, control=controlgroups)
 
 def plotcorrsamples(wildcards):
     dd = SAMPLES if wildcards.status=="all" else PASSING
@@ -534,103 +531,49 @@ rule plot_metagenes:
     script:
         "scripts/plot_mnase_metagenes.R"
 
-# rule build_nucwave_input:
-#     input:
-#        "alignment/{sample}.bam"
-#     output:
-#        "alignment/{sample}.bowtie"
-#     log : "logs/build_nucwave_input/nucwave_input-{sample}.log"
-#     shell: """
-#         (samtools view {input} | awk 'BEGIN{{FS=OFS="\t"}} ($2==163) || ($2==99) {{print "+", $3, $4-1, $10}} ($2==83) || ($2==147) {{print "-", $3, $4-1, $10}}' > {output}) &> {log}
-#         """
+rule group_bam_for_danpos:
+    input:
+        "alignment/{sample}_" + config["combinedgenome"]["experimental_prefix"] + "only.bam"
+    output:
+        "nucleosome_calling/data/{group}/{sample}.bam"
+    shell: """
+        cp {input} {output}
+        """
 
-# rule nucwave:
-#     input:
-#         fasta = config["genome"]["fasta"],
-#         alignment = "alignment/{sample}.bowtie"
-#     output:
-#         "nucwave/{sample}/{sample}_cut_p.wig",
-#         "nucwave/{sample}/{sample}_cut_m.wig",
-#         "nucwave/{sample}/{sample}_depth_complete_PE.wig",
-#         "nucwave/{sample}/{sample}_PEcenter.wig",
-#         "nucwave/{sample}/{sample}_depth_trimmed_PE.wig",
-#         "nucwave/{sample}/{sample}_depth_wl_trimmed_PE.wig",
-#         "nucwave/{sample}/{sample}.historeadsize"
-#     log:
-#         "logs/nucwave/nucwave-{sample}.log"
-#     shell: """
-#        (python scripts/nucwave_pe.py -w -o nucwave/{wildcards.sample} -g {input.fasta} -a {input.alignment} -p {wildcards.sample}) &> {log}
-#        """
+#TODO: spike-in normalization with --count
+rule danpos:
+    input:
+        ["nucleosome_calling/data/" + SAMPLES[x]['group'] + "/" + x + ".bam" for x in SAMPLES]
+    output:
+        "nucleosome_calling/{condition}-v-{control}/nucleosome_calling_data_{condition}-nucleosome_calling_data_{control}.positions.integrative.xls",
+        "nucleosome_calling/{condition}-v-{control}/reference_positions.xls",
+        "nucleosome_calling/{condition}-v-{control}/diff/nucleosome_calling_data_{condition}-nucleosome_calling_data_{control}.pois_diff.wig",
+        "nucleosome_calling/{condition}-v-{control}/pooled/nucleosome_calling_data_{condition}.Fnor.smooth.positions.ref_adjust.xls",
+        "nucleosome_calling/{condition}-v-{control}/pooled/nucleosome_calling_data_{condition}.Fnor.smooth.positions.xls",
+        "nucleosome_calling/{condition}-v-{control}/pooled/nucleosome_calling_data_{condition}.Fnor.smooth.wig",
+        "nucleosome_calling/{condition}-v-{control}/pooled/nucleosome_calling_data_{control}.Fnor.smooth.positions.ref_adjust.xls",
+        "nucleosome_calling/{condition}-v-{control}/pooled/nucleosome_calling_data_{control}.Fnor.smooth.positions.xls",
+        "nucleosome_calling/{condition}-v-{control}/pooled/nucleosome_calling_data_{control}.Fnor.smooth.wig"
+    conda:
+        "envs/danpos.yaml"
+    log: "logs/danpos/danpos-{condition}-v-{control}.log"
+    shell: """
+        (python scripts/danpos-2.2.2/danpos.py dpos nucleosome_calling/data/{wildcards.condition}/:nucleosome_calling/data/{wildcards.control}/ -m 1 -e 1 -a 1 -o nucleosome_calling/{wildcards.condition}-v-{wildcards.control}) &> {log}
+        """
 
-# rule get_fragsizes:
-#     input:
-#         "alignment/fragments/{sample}-fragments.bedpe"
-#     output:
-#         temp("alignment/fragments/.{sample}-fragsizes.tsv")
-#     params:
-#         group = lambda wildcards: config["samples"][wildcards.sample]["group"]
-#     log : "logs/get_fragsizes/get_fragsizes-{sample}.log"
-#     shell: """
-#         (awk -v sample={wildcards.sample} -v group={params.group} 'BEGIN{{FS=OFS="\t"; srand()}} !/^$/ {{if (rand()<= .08) print sample, group, $6-$2}}' {input} > {output}) &> {log}
-#         """
-
-# rule cat_fragsizes:
-#     input:
-#         expand("alignment/fragments/.{sample}-fragsizes.tsv", sample=SAMPLES)
-#     output:
-#         "alignment/fragments/fragsizes.tsv.gz"
-#     shell: """
-#         cat {input} | pigz -f > {output}
-#         """
-
-# rule plot_fragsizes:
-#     input:
-#         table = "alignment/fragments/fragsizes.tsv.gz"
-#     output:
-#         plot = "qual_ctrl/frag-size-dist.svg"
-#     script:
-#         "scripts/plotfragsizedist.R"
-
-# rule make_bigwig_for_deeptools:
-#     input:
-#         bg = "coverage/{sample}-mnase-midpoint-CPM.bedgraph",
-#         chrsizes = config["genome"]["chrsizes"]
-#     output:
-#         "coverage/bw/{sample}-mnase-midpoint-CPM.bw"
-#     log: "logs/make_bigwig_for_deeptools/make_bw-{sample}.log"
-#     shell: """
-#         (bedGraphToBigWig {input.bg} {input.chrsizes} {output}) &> {log}
-#         """
-
-# rule group_bam_for_danpos:
-#     input:
-#         "alignment/{sample}.bam"
-#     output:
-#         "danpos/{group}/{sample}.bam"
-#     shell: """
-#         cp {input} {output}
-#     """
-
-# rule danpos:
-#     input:
-#         ["danpos/" + SAMPLES[x]['group'] + "/" + x + ".bam" for x in SAMPLES]
-#     output:
-#         "danpos/{condition}-v-{control}/danpos_{condition}-danpos_{control}.positions.integrative.xls",
-#         "danpos/{condition}-v-{control}/reference_positions.xls",
-#         "danpos/{condition}-v-{control}/diff/danpos_{condition}-danpos_{control}.pois_diff.wig",
-#         "danpos/{condition}-v-{control}/pooled/danpos_{condition}.Fnor.smooth.positions.ref_adjust.xls",
-#         "danpos/{condition}-v-{control}/pooled/danpos_{condition}.Fnor.smooth.positions.xls",
-#         "danpos/{condition}-v-{control}/pooled/danpos_{condition}.Fnor.smooth.wig",
-#         "danpos/{condition}-v-{control}/pooled/danpos_{control}.Fnor.smooth.positions.ref_adjust.xls",
-#         "danpos/{condition}-v-{control}/pooled/danpos_{control}.Fnor.smooth.positions.xls",
-#         "danpos/{condition}-v-{control}/pooled/danpos_{control}.Fnor.smooth.wig"
-#     conda:
-#         "envs/danpos.yaml"
-#     log: "logs/danpos/danpos-{condition}-v-{control}.log"
-#     shell: """
-#         module load seq/samtools/0.1.19
-#         (python /groups/winston/jc459/spt5/mnase-seq/scripts/danpos-2.2.2/danpos.py dpos danpos/{wildcards.condition}/:danpos/{wildcards.control}/ -m 1 -o danpos/{wildcards.condition}-v-{wildcards.control}) &> {log}
-#         module unload seq/samtools/0.1.19
-#         """
-
-# ##for now I use default parameters except for paired end
+rule plot_danpos_results:
+    input:
+        results = "nucleosome_calling/{condition}-v-{control}/nucleosome_calling_data_{condition}-nucleosome_calling_data_{control}.positions.integrative.xls",
+    output:
+        shift_hist = "nucleosome_calling/{condition}-v-{control}/{condition}-v-{control}_dyad-shift-histogram.svg",
+        occupancy_volcano = "nucleosome_calling/{condition}-v-{control}/{condition}-v-{control}_occupancy_volcano.svg",
+        fuzziness_volcano = "nucleosome_calling/{condition}-v-{control}/{condition}-v-{control}_fuzziness_volcano.svg",
+        occupancy_v_fuzziness = "nucleosome_calling/{condition}-v-{control}/{condition}-v-{control}_occupancy-v-fuzziness-scatter.svg",
+        occupancy_violin = "nucleosome_calling/{condition}-v-{control}/{condition}-v-{control}_occupancy-violin.svg",
+        occupancy_freqpoly = "nucleosome_calling/{condition}-v-{control}/{condition}-v-{control}_occupancy-freqpoly.svg",
+        occupancy_ecdf = "nucleosome_calling/{condition}-v-{control}/{condition}-v-{control}_occupancy-ecdf.svg",
+        fuzziness_violin = "nucleosome_calling/{condition}-v-{control}/{condition}-v-{control}_fuzziness-violin.svg",
+        fuzziness_freqpoly = "nucleosome_calling/{condition}-v-{control}/{condition}-v-{control}_fuzziness-freqpoly.svg",
+        fuzziness_ecdf = "nucleosome_calling/{condition}-v-{control}/{condition}-v-{control}_fuzziness-ecdf.svg"
+    script:
+        "scripts/nucleosomes.R"

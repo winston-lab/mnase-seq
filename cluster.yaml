@@ -113,3 +113,11 @@ plot_heatmaps:
 plot_metagenes:
     time : 20 
     mem : 10000
+
+danpos:
+    time: 60
+    mem: 8000
+
+plot_danpos_results:
+    time: 10
+    mem: 10000

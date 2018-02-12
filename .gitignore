@@ -5,15 +5,13 @@ logs/cluster/*
 .snakemake/
 alignment/
 coverage/
-nucwave/
+nucleosome_calling/
 qual_ctrl/
-correlations/
 datavis/
 scripts/.snakemake*
 snakemake.err
 snakemake.log
 *.svg
-danpos/
 
 config.yaml
 

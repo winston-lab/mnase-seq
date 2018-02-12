@@ -3,7 +3,7 @@ channels:
     - bioconda
 dependencies:
     - python=2.7.13
-    - samtools=0.1.17
+    - samtools=0.1.19
     - numpy=1.5.1
     - rpy2=2.8.5
     - r=3.3.2
