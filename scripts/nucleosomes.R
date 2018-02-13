@@ -22,7 +22,7 @@ main = function(condition_label, control_label, in_table, shift_hist_out, occupa
     
     #histogram of distance between nucleosome dyads (condition-control)
     shift_hist = ggplot(data = df, aes(x=abs(treat_smt_loca-control_smt_loca))) +
-        geom_histogram(binwidth=10, boundary=0, fill="#114477", color="black") +
+        geom_histogram(binwidth=1, center=0, fill="#114477", color="black") +
         xlab("nucleosome dyad shift (bp)") +
         ggtitle(paste("nucleosome dyad shifts,", condition_label, "vs.", control_label)) +
         theme_default +

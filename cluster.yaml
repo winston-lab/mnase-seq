@@ -116,7 +116,7 @@ plot_metagenes:
 
 danpos:
     time: 60
-    mem: 8000
+    mem: 4000
 
 plot_danpos_results:
     time: 10
