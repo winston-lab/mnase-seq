@@ -267,7 +267,7 @@ rule plot_fastqc_summary:
         per_seq_qual = 'qual_ctrl/fastqc/per_sequence_quality.tsv',
         adapter_content = 'qual_ctrl/fastqc/adapter_content.tsv',
         seq_dup = 'qual_ctrl/fastqc/sequence_duplication_levels.tsv',
-        kmer = 'qual_ctrl/fastqc/kmer_content.tsv'
+        # kmer = 'qual_ctrl/fastqc/kmer_content.tsv'
     output:
         seq_len_dist = 'qual_ctrl/fastqc/sequence_length_distribution.svg',
         per_tile = 'qual_ctrl/fastqc/per_tile_quality.svg',
@@ -277,7 +277,7 @@ rule plot_fastqc_summary:
         per_seq_qual = 'qual_ctrl/fastqc/per_sequence_quality.svg',
         adapter_content = 'qual_ctrl/fastqc/adapter_content.svg',
         seq_dup = 'qual_ctrl/fastqc/sequence_duplication_levels.svg',
-        kmer = 'qual_ctrl/fastqc/kmer_content.svg',
+        # kmer = 'qual_ctrl/fastqc/kmer_content.svg',
     script: "scripts/fastqc_summary.R"
 
 #the index is required to use region arguments in samtools view to separate the species

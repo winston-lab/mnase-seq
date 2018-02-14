@@ -12,10 +12,10 @@ import = function(path){
             
 main = function(seq_len_dist_in, per_tile_in, per_base_qual_in,
                 per_base_seq_in, per_base_n_in, per_seq_gc_in,
-                per_seq_qual_in, adapter_content_in, seq_dup_in, kmer_in,
+                per_seq_qual_in, adapter_content_in, seq_dup_in, 
                 seq_len_dist_out, per_tile_out, per_base_qual_out,
                 per_base_seq_out, per_seq_gc_out, per_seq_qual_out,
-                adapter_content_out, seq_dup_out, kmer_out){
+                adapter_content_out, seq_dup_out){
     #damnit fastqc...why bin some of the data and then output in this shite format...
     length_distribution = import(seq_len_dist_in) %>% 
         separate(length, into=c('a','b'), sep="-", fill="right", convert=TRUE) %>% 
@@ -58,7 +58,7 @@ main = function(seq_len_dist_in, per_tile_in, per_base_qual_in,
     duplication_levels = import(seq_dup_in) %>% 
         mutate_at(vars(duplication_level), funs(fct_inorder(., ordered=TRUE)))
     
-    kmer_content = import(kmer_in)
+    #kmer_content = import(kmer_in)
     
     theme_standard = theme_light() +
         theme(text = element_text(size=12, color="black", face="bold"),
@@ -191,19 +191,19 @@ main = function(seq_len_dist_in, per_tile_in, per_base_qual_in,
     
     ggsave(seq_dup_out, plot=dup_level_plot, width=26, height=2+1.5*nsamples, units="cm")
     
-    #ermmm...no obvious way to make this one look nice, but then it doesn't really need to
-    kmer_content_plot = ggplot(data = kmer_content, aes(x=max_position, y=log2(obs_over_exp_max), label=sequence)) +
-        geom_point(shape=16, stroke=0, size=1, alpha=0.5) +
-        geom_label_repel(size=2, label.size=unit(0.05, "pt"), label.padding=unit(0.1, "pt"), label.r=unit(0,"pt"), segment.size=0.1,
-                         box.padding=unit(0.05,"pt"), segment.alpha=0.4) +
-        xlab("position in read") +
-        ylab(expression(bold(log[2]~ frac("observed", "expected")))) +
-        ggtitle("k-mer content",
-                subtitle = "top 20 overrepresented k-mers") +
-        facet_grid(sample~status, switch="y", scales="free_y") +
-        theme_standard + theme(plot.subtitle = element_text(size=12, face="plain"))
-    
-    ggsave(kmer_out, plot=kmer_content_plot, width=35, height=2+5*nsamples, units="cm", limitsize=FALSE)
+    ##ermmm...no obvious way to make this one look nice, but then it doesn't really need to
+    #kmer_content_plot = ggplot(data = kmer_content, aes(x=max_position, y=log2(obs_over_exp_max), label=sequence)) +
+    #    geom_point(shape=16, stroke=0, size=1, alpha=0.5) +
+    #    geom_label_repel(size=2, label.size=unit(0.05, "pt"), label.padding=unit(0.1, "pt"), label.r=unit(0,"pt"), segment.size=0.1,
+    #                     box.padding=unit(0.05,"pt"), segment.alpha=0.4) +
+    #    xlab("position in read") +
+    #    ylab(expression(bold(log[2]~ frac("observed", "expected")))) +
+    #    ggtitle("k-mer content",
+    #            subtitle = "top 20 overrepresented k-mers") +
+    #    facet_grid(sample~status, switch="y", scales="free_y") +
+    #    theme_standard + theme(plot.subtitle = element_text(size=12, face="plain"))
+    #
+    #ggsave(kmer_out, plot=kmer_content_plot, width=35, height=2+5*nsamples, units="cm", limitsize=FALSE)
 }
 
 main(seq_len_dist_in = snakemake@input[["seq_len_dist"]],
@@ -215,7 +215,7 @@ main(seq_len_dist_in = snakemake@input[["seq_len_dist"]],
      per_seq_qual_in = snakemake@input[["per_seq_qual"]],
      adapter_content_in = snakemake@input[["adapter_content"]],
      seq_dup_in = snakemake@input[["seq_dup"]],
-     kmer_in = snakemake@input[["kmer"]],
+     #kmer_in = snakemake@input[["kmer"]],
      seq_len_dist_out = snakemake@output[["seq_len_dist"]],
      per_tile_out = snakemake@output[["per_tile"]],
      per_base_qual_out = snakemake@output[["per_base_qual"]],
@@ -223,5 +223,5 @@ main(seq_len_dist_in = snakemake@input[["seq_len_dist"]],
      per_seq_gc_out = snakemake@output[["per_seq_gc"]],
      per_seq_qual_out = snakemake@output[["per_seq_qual"]],
      adapter_content_out = snakemake@output[["adapter_content"]],
-     seq_dup_out = snakemake@output[["seq_dup"]],
-     kmer_out = snakemake@output[["kmer"]])
+     seq_dup_out = snakemake@output[["seq_dup"]])
+     #kmer_out = snakemake@output[["kmer"]])
