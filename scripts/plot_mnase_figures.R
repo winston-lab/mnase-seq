@@ -7,7 +7,7 @@ library(ggthemes)
 library(gtable)
 
 main = function(in_paths, samplelist, anno_paths, ptype, readtype, upstream, dnstream, scaled_length, pct_cutoff,
-                trim_pct, refptlabel, endlabel, cmap, sortmethod, cluster_groups, cluster_five, cluster_three, k,
+                trim_pct, refptlabel, endlabel, cmap, sortmethod, cluster_samples, cluster_five, cluster_three, k,
                 heatmap_sample_out, heatmap_group_out, meta_sample_out, meta_sample_overlay_out,
                 meta_group_out, meta_sampleclust_out, meta_groupclust_out, anno_out, cluster_out){
     
@@ -33,7 +33,7 @@ main = function(in_paths, samplelist, anno_paths, ptype, readtype, upstream, dns
         heatmap_base = heatmap_base +
             geom_raster(aes(x=position, y=new_index, fill=cpm), interpolate=FALSE) +
             scale_y_reverse(expand=c(0.005,5), breaks=hmap_ybreaks) +
-            scale_fill_viridis(option = cmap, na.value="FFFFFF00", name='MNase-seq dyad signal',
+            scale_fill_viridis(option = cmap, na.value="#FFFFFF00", name='MNase-seq dyad signal',
                                guide=guide_colorbar(title.position="top",
                                                     barwidth=20, barheight=1, title.hjust=0.5)) +
             theme_minimal() +
@@ -250,7 +250,7 @@ main = function(in_paths, samplelist, anno_paths, ptype, readtype, upstream, dns
     }
     
     df = read_tsv(in_paths, col_names=c("group", "sample", "annotation", "index", "position","cpm")) %>%
-        filter(sample %in% samplelist & !is.na(cpm)) %>% 
+        filter((sample %in% samplelist | sample %in% cluster_samples) & !is.na(cpm)) %>% 
         group_by(annotation) %>% 
         mutate(annotation_labeled = paste(n_distinct(index), annotation)) %>% 
         ungroup() %>% 
@@ -286,7 +286,7 @@ main = function(in_paths, samplelist, anno_paths, ptype, readtype, upstream, dns
         
         #cluster for each annotation
         for (i in 1:length(annotations)){
-            rr = df %>% filter(annotation==annotations[i] & group %in% cluster_groups &
+            rr = df %>% filter(annotation==annotations[i] & sample %in% cluster_samples &
                                    between(position, cluster_five/1000, cluster_three/1000)) %>% 
                 select(-c(group, annotation, replicate)) %>% 
                 unite(cid, c(sample, position), sep="~") %>%
@@ -472,8 +472,8 @@ main = function(in_paths, samplelist, anno_paths, ptype, readtype, upstream, dns
         facet_grid(annotation~group, labeller=label_context)
     if (n_anno==1 && max(k)==1){
         meta_sample = meta_sample +
-            scale_color_manual(values=rep("#4477AA", 2)) +
-            scale_fill_manual(values=rep("#4477AA", 2)) +
+            scale_color_manual(values=rep("#4477AA", 100)) +
+            scale_fill_manual(values=rep("#4477AA", 100)) +
             facet_grid(replicate~group) +
             ggtitle(paste("MNase-seq", readtype),
                     subtitle = annotations[1]) +
@@ -573,7 +573,7 @@ main(in_paths = snakemake@input[["matrix"]],
      endlabel = snakemake@params[["endlabel"]],
      cmap = snakemake@params[["cmap"]],
      sortmethod = snakemake@params[["sortmethod"]],
-     cluster_groups = snakemake@params[["cluster_groups"]],
+     cluster_samples = snakemake@params[["cluster_samples"]],
      cluster_five = snakemake@params[["cluster_five"]],
      cluster_three = snakemake@params[["cluster_three"]],
      k = snakemake@params[["k"]],

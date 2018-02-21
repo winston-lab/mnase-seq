@@ -66,6 +66,13 @@ def plotcorrsamples(wildcards):
     else: #condition!=all;norm==spike
         return [k for k,v in dd.items() if (v["group"]==wildcards.control or v["group"]==wildcards.condition) and v["spikein"]=="y"]
 
+def cluster_samples(status, norm, cluster_groups):
+    dd = SAMPLES if status=="all" else PASSING
+    if norm=="libsizenorm": #condition!=all;norm==lib
+        return [k for k,v in dd.items() if v["group"] in cluster_groups]
+    else: #condition!=all;norm==spike
+        return [k for k,v in dd.items() if v["group"] in cluster_groups and v["spikein"]=="y"]
+
 rule make_barcode_file:
     output:
         "fastq/barcodes.tsv"
@@ -522,7 +529,7 @@ rule plot_figures:
         endlabel = lambda wildcards:  "HAIL SATAN" if FIGURES[wildcards.figure]["parameters"]["type"]=="absolute" else FIGURES[wildcards.figure]["parameters"]["endlabel"],
         cmap = lambda wildcards: FIGURES[wildcards.figure]["parameters"]["heatmap_colormap"],
         sortmethod = lambda wildcards: FIGURES[wildcards.figure]["parameters"]["arrange"],
-        cluster_groups = lambda wildcards: FIGURES[wildcards.figure]["parameters"]["cluster_conditions"],
+        cluster_samples = lambda wildcards: [] if FIGURES[wildcards.figure]["parameters"]["arrange"] != "cluster" else cluster_samples(wildcards.status, wildcards.norm, FIGURES[wildcards.figure]["parameters"]["cluster_conditions"]),
         cluster_five = lambda wildcards: FIGURES[wildcards.figure]["parameters"]["cluster_five"],
         cluster_three = lambda wildcards: FIGURES[wildcards.figure]["parameters"]["cluster_three"],
         k = lambda wildcards: [v["n_clusters"] for k,v in FIGURES[wildcards.figure]["annotations"].items()],
