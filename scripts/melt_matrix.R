@@ -1,18 +1,20 @@
 #!/usr/bin/env/ Rscript
-library(optparse)
+library(argparse)
 library(tidyverse)
 
-option_list = list(make_option(c("-i", "--input")),
-                   make_option(c("-r", "--refpt")),
-                   make_option(c("-g", "--group")),
-                   make_option(c("-s", "--sample")),
-                   make_option(c("-b", "--binsize"), type="integer"),
-                   make_option(c("-u", "--upstream"), type="integer"),
-                   make_option(c("-o", "--output")))
+parser = ArgumentParser()
+parser$add_argument('-i', '--input', type='character')
+parser$add_argument('-r', '--refpt', type='character', nargs="+")
+parser$add_argument('-g', '--group', type='character', nargs="+")
+parser$add_argument('-s', '--sample', type='character', nargs="+")
+parser$add_argument('-a', '--annotation', type='character', nargs="+")
+parser$add_argument('-b', '--binsize', type='integer')
+parser$add_argument('-u', '--upstream', type='integer')
+parser$add_argument('-o', '--output', type='character')
 
-opt = parse_args(OptionParser(option_list=option_list))
+args = parser$parse_args()
 
-melt = function(inmatrix, refpt, group, sample, binsize, upstream, outpath){
+melt = function(inmatrix, refpt, group, sample, annotation, binsize, upstream, outpath){
     raw = read_tsv(inmatrix, skip=3, col_names=FALSE)
     names(raw) = seq(ncol(raw))
     
@@ -22,22 +24,22 @@ melt = function(inmatrix, refpt, group, sample, binsize, upstream, outpath){
           filter(!is.na(value)) 
     if(binsize>1){
         df = df %>%
-            transmute(group = group,
-                      sample = sample,
+            transmute(group = group, sample = sample,
+                      annotation = annotation, 
                       index = as.integer(index),
                       position = (as.numeric(variable)*binsize-(upstream+1.5*binsize))/1000,
                       cpm = as.numeric(value)) 
     } else if (refpt=="TES"){
         df = df %>%
-            transmute(group = group,
-                      sample = sample,
+            transmute(group = group, sample = sample,
+                      annotation = annotation, 
                       index = as.integer(index),
                       position = (as.numeric(variable)-(1+upstream))/1000,
                       cpm = as.numeric(value)) 
     } else {
         df = df %>%
-            transmute(group = group,
-                      sample = sample,
+            transmute(group = group, sample = sample,
+                      annotation = annotation, 
                       index = as.integer(index),
                       position = (as.numeric(variable)-(2+upstream))/1000,
                       cpm = as.numeric(value)) 
@@ -46,10 +48,11 @@ melt = function(inmatrix, refpt, group, sample, binsize, upstream, outpath){
     return(df)
 }
 
-melt(inmatrix = opt$input,
-     refpt = opt$refpt,
-     group = opt$group,
-     sample = opt$sample,
-     binsize = opt$binsize,
-     upstream = opt$upstream,
-     outpath = opt$output)
+melt(inmatrix = args$input,
+     refpt = args$refpt,
+     group = paste(args$group, collapse=" "),
+     sample = paste(args$sample, collapse=" "),
+     annotation = paste(args$annotation, collapse=" "),
+     binsize = args$binsize,
+     upstream = args$upstream,
+     outpath = args$output)

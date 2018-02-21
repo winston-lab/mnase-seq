@@ -18,10 +18,13 @@ if sipassing:
 COUNTTYPES = ["counts", "sicounts"] if sisamples else ["counts"]
 NORMS = ["libsizenorm", "spikenorm"] if sisamples else ["libsizenorm"]
 
+FIGURES = config["figures"]
+
 localrules: all,
             make_barcode_file,
             bowtie_build,
             samtools_index,
+            cat_matrices,
             group_bam_for_danpos,
 
 rule all:
@@ -43,9 +46,10 @@ rule all:
         expand(expand("qual_ctrl/{{status}}/{condition}-v-{control}/{condition}-v-{control}-mnase-{{status}}-window-{{windowsize}}-spikenorm-correlations.svg", zip, condition=conditiongroups_si+["all"], control=controlgroups_si+["all"]), status=["all","passing"], windowsize=config["corr-windowsizes"]) +
         expand(expand("qual_ctrl/{{status}}/{condition}-v-{control}/{condition}-v-{control}-mnase-{{status}}-window-{{windowsize}}-libsizenorm-correlations.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), status=["all","passing"], windowsize=config["corr-windowsizes"]) if sisamples else expand(expand("qual_ctrl/{{status}}/{condition}-v-{control}/{condition}-v-{control}-mnase-{{status}}-window-{{windowsize}}-libsizenorm-correlations.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), status=["all","passing"], windowsize=config["corr-windowsizes"]),
         #datavis
-        expand(expand("datavis/{{annotation}}/spikenorm/{condition}-v-{control}/mnase-{{annotation}}-spikenorm-{{status}}_{condition}-v-{control}_{{readtype}}-{{plot}}-bysample.svg", zip, condition=conditiongroups_si+["all"], control=controlgroups_si+["all"]), annotation=config["annotations"], readtype=["midpoint","wholefrag"], status=["all","passing"], plot=["heatmap","metagene"]) +
-        expand(expand("datavis/{{annotation}}/libsizenorm/{condition}-v-{control}/mnase-{{annotation}}-libsizenorm-{{status}}_{condition}-v-{control}_{{readtype}}-{{plot}}-bysample.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), annotation=config["annotations"], readtype=["midpoint","wholefrag"], status=["all","passing"], plot=["heatmap", "metagene"]) if sisamples else
-        expand(expand("datavis/{{annotation}}/libsizenorm/{condition}-v-{control}/mnase-{{annotation}}-libsizenorm-{{status}}_{condition}-v-{control}_{{readtype}}-{{plot}}-bysample.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), annotation=config["annotations"], readtype=["midpoint","wholefrag"], status=["all","passing"], plot=["heatmap","metagene"]),
+        # expand("datavis/{figure}/{norm}/allsamples-allannotations-{readtype}-{norm}.tsv.gz", figure=FIGURES, norm=NORMS, readtype=["midpoint", "wholefrag"]),
+        expand(expand("datavis/{{figure}}/spikenorm/{condition}-v-{control}/{{status}}/{{readtype}}/mnase-{{figure}}-spikenorm-{{status}}_{condition}-v-{control}_{{readtype}}-heatmap-bysample.svg", zip, condition=conditiongroups_si+["all"], control=controlgroups_si+["all"]), figure=FIGURES, readtype=["midpoint","wholefrag"], status=["all","passing"]) +
+        expand(expand("datavis/{{figure}}/libsizenorm/{condition}-v-{control}/{{status}}/{{readtype}}/mnase-{{figure}}-libsizenorm-{{status}}_{condition}-v-{control}_{{readtype}}-heatmap-bysample.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), figure=FIGURES, readtype=["midpoint","wholefrag"], status=["all","passing"]) if sisamples else
+        expand(expand("datavis/{{figure}}/libsizenorm/{condition}-v-{control}/{{status}}/{{readtype}}/mnase-{{figure}}-libsizenorm-{{status}}_{condition}-v-{control}_{{readtype}}-heatmap-bysample.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), figure=FIGURES, readtype=["midpoint","wholefrag"], status=["all","passing"]),
         #call nucleosomes 
         expand("nucleosome_calling/{condition}-v-{control}/reference_positions.xls", zip, condition=conditiongroups, control=controlgroups),
         expand("nucleosome_calling/{condition}-v-{control}/{condition}-v-{control}_dyad-shift-histogram.svg", zip, condition=conditiongroups, control=controlgroups)
@@ -458,78 +462,72 @@ rule smoothed_midpoint_coverage:
 
 rule compute_matrix:
     input:
-        annotation = lambda wildcards: config["annotations"][wildcards.annotation]["path"],
+        annotation = lambda wildcards: FIGURES[wildcards.figure]["annotations"][wildcards.annotation]["path"],
         bw = "coverage/{norm}/{sample}-mnase-{readtype}-{norm}.bw"
     output:
-        dtfile = temp("datavis/{annotation}/{norm}/{annotation}-{sample}-{readtype}-{norm}.mat.gz"),
-        matrix = temp("datavis/{annotation}/{norm}/{annotation}-{sample}-{readtype}-{norm}.tsv"),
-        melted = temp("datavis/{annotation}/{norm}/{annotation}-{sample}-{readtype}-{norm}-melted.tsv.gz")
+        dtfile = temp("datavis/{figure}/{norm}/{annotation}_{sample}-{readtype}-{norm}.mat.gz"),
+        matrix = temp("datavis/{figure}/{norm}/{annotation}_{sample}-{readtype}-{norm}.tsv"),
+        melted = temp("datavis/{figure}/{norm}/{annotation}_{sample}-{readtype}-{norm}-melted.tsv.gz")
     params:
         group = lambda wildcards : SAMPLES[wildcards.sample]["group"],
-        refpoint = lambda wildcards: config["annotations"][wildcards.annotation]["refpoint"],
-        upstream = lambda wildcards: config["annotations"][wildcards.annotation]["upstream"] + config["annotations"][wildcards.annotation]["binsize"],
-        dnstream = lambda wildcards: config["annotations"][wildcards.annotation]["dnstream"] + config["annotations"][wildcards.annotation]["binsize"],
-        binsize = lambda wildcards: config["annotations"][wildcards.annotation]["binsize"],
-        sort = lambda wildcards: config["annotations"][wildcards.annotation]["sort"],
-        sortusing = lambda wildcards: config["annotations"][wildcards.annotation]["sortby"],
-        binstat = lambda wildcards: config["annotations"][wildcards.annotation]["binstat"]
+        refpoint = lambda wildcards: FIGURES[wildcards.figure]["parameters"]["refpoint"],
+        upstream = lambda wildcards: FIGURES[wildcards.figure]["parameters"]["upstream"] + FIGURES[wildcards.figure]["parameters"]["binsize"],
+        dnstream = lambda wildcards: FIGURES[wildcards.figure]["parameters"]["dnstream"] + FIGURES[wildcards.figure]["parameters"]["binsize"],
+        binsize = lambda wildcards: FIGURES[wildcards.figure]["parameters"]["binsize"],
+        binstat = lambda wildcards: FIGURES[wildcards.figure]["parameters"]["binstat"],
+        nan_afterend = lambda wildcards: "--nanAfterEnd" if FIGURES[wildcards.figure]["parameters"]["nan_afterend"] else [],
+        anno_label = lambda wildcards: FIGURES[wildcards.figure]["annotations"][wildcards.annotation]["label"]
     threads : config["threads"]
-    log: "logs/compute_matrix/compute_matrix-{annotation}-{sample}-{readtype}-{norm}.log"
+    log: "logs/compute_matrix/compute_matrix-{figure}_{annotation}_{sample}_{readtype}_{norm}.log"
     run:
-        if config["annotations"][wildcards.annotation]["nan_afterend"]=="y":
-            shell("(computeMatrix reference-point -R {input.annotation} -S {input.bw} --referencePoint {params.refpoint} -out {output.dtfile} --outFileNameMatrix {output.matrix} -b {params.upstream} -a {params.dnstream} --nanAfterEnd --binSize {params.binsize} --sortRegions {params.sort} --sortUsing {params.sortusing} --averageTypeBins {params.binstat} -p {threads}; pigz -fk {output.matrix}) &> {log}")
-        else:
-            shell("(computeMatrix reference-point -R {input.annotation} -S {input.bw} --referencePoint {params.refpoint} -out {output.dtfile} --outFileNameMatrix {output.matrix} -b {params.upstream} -a {params.dnstream} --binSize {params.binsize} --sortRegions {params.sort} --sortUsing {params.sortusing} --averageTypeBins {params.binstat} -p {threads}; pigz -fk {output.matrix}) &> {log}")
+        shell("(computeMatrix reference-point -R {input.annotation} -S {input.bw} --referencePoint {params.refpoint} -out {output.dtfile} --outFileNameMatrix {output.matrix} -b {params.upstream} -a {params.dnstream} {params.nan_afterend} --binSize {params.binsize} --averageTypeBins {params.binstat} -p {threads}) &> {log}")
         melt_upstream = params.upstream-params.binsize
-        shell("""(Rscript scripts/melt_matrix.R -i {output.matrix} -r {params.refpoint} --group {params.group} -s {wildcards.sample} -b {params.binsize} -u {melt_upstream} -o {output.melted}) &>> {log}""")
+        shell("""(Rscript scripts/melt_matrix.R -i {output.matrix} -r {params.refpoint} -g {params.group} -s {wildcards.sample} -a {params.anno_label} -b {params.binsize} -u {melt_upstream} -o {output.melted}) &>> {log}""")
 
 rule cat_matrices:
     input:
-        expand("datavis/{{annotation}}/{{norm}}/{{annotation}}-{sample}-{{readtype}}-{{norm}}-melted.tsv.gz", sample=SAMPLES)
+        lambda wildcards: expand("datavis/{figure}/{norm}/{annotation}_{sample}-{readtype}-{norm}-melted.tsv.gz", annotation=[k for k,v in FIGURES[wildcards.figure]["annotations"].items()], sample=SAMPLES, figure=wildcards.figure, norm=wildcards.norm, readtype=wildcards.readtype)
     output:
-        "datavis/{annotation}/{norm}/allsamples-{annotation}-{readtype}-{norm}.tsv.gz"
-    log: "logs/cat_matrices/cat_matrices-{annotation}-{readtype}-{norm}.log"
+        "datavis/{figure}/{norm}/{figure}-allsamples-allannotations-{readtype}-{norm}.tsv.gz"
+    log: "logs/cat_matrices/cat_matrices-{figure}-{readtype}-{norm}.log"
     shell: """
         (cat {input} > {output}) &> {log}
         """
 
-rule plot_heatmaps:
+rule plot_figures:
     input:
-        matrix = "datavis/{annotation}/{norm}/allsamples-{annotation}-{readtype}-{norm}.tsv.gz"
+        matrix = "datavis/{figure}/{norm}/{figure}-allsamples-allannotations-{readtype}-{norm}.tsv.gz",
+        annotations = lambda wildcards: [v["path"] for k,v in FIGURES[wildcards.figure]["annotations"].items()]
     output:
-        heatmap_sample = "datavis/{annotation}/{norm}/{condition}-v-{control}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}_{readtype}-heatmap-bysample.svg",
-        heatmap_group = "datavis/{annotation}/{norm}/{condition}-v-{control}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}_{readtype}-heatmap-bygroup.svg",
+        heatmap_sample = "datavis/{figure}/{norm}/{condition}-v-{control}/{status}/{readtype}/mnase-{figure}-{norm}-{status}_{condition}-v-{control}_{readtype}-heatmap-bysample.svg",
+        heatmap_group = "datavis/{figure}/{norm}/{condition}-v-{control}/{status}/{readtype}/mnase-{figure}-{norm}-{status}_{condition}-v-{control}_{readtype}-heatmap-bygroup.svg",
+        meta_sample = "datavis/{figure}/{norm}/{condition}-v-{control}/{status}/{readtype}/mnase-{figure}-{norm}-{status}_{condition}-v-{control}_{readtype}-metagene-bysample.svg",
+        meta_sample_overlay = "datavis/{figure}/{norm}/{condition}-v-{control}/{status}/{readtype}/mnase-{figure}-{norm}-{status}_{condition}-v-{control}_{readtype}-metagene-bysample-overlay.svg",
+        meta_group = "datavis/{figure}/{norm}/{condition}-v-{control}/{status}/{readtype}/mnase-{figure}-{norm}-{status}_{condition}-v-{control}_{readtype}-metagene-bygroup.svg",
+        meta_sample_clust = "datavis/{figure}/{norm}/{condition}-v-{control}/{status}/{readtype}/mnase-{figure}-{norm}-{status}_{condition}-v-{control}_{readtype}-metagene-bycluster-sample.svg",
+        meta_group_clust = "datavis/{figure}/{norm}/{condition}-v-{control}/{status}/{readtype}/mnase-{figure}-{norm}-{status}_{condition}-v-{control}_{readtype}-metagene-bycluster-group.svg",
     params:
+        # abusing snakemake a bit here...using params as output paths since in order to use lambda functions
+        annotations_out = lambda wildcards: ["datavis/" + wildcards.figure + "/" + wildcards.norm + "/" + wildcards.condition + "-v-" + wildcards.control + "/" + wildcards.status + "/" + wildcards.readtype + "/" + annotation + "_cluster-" + str(cluster) + ".bed" for annotation in FIGURES[wildcards.figure]["annotations"] for cluster in range(1, FIGURES[wildcards.figure]["annotations"][annotation]["n_clusters"]+1)],
+        clusters_out = lambda wildcards: ["datavis/" + wildcards.figure + "/" + wildcards.norm + "/" + wildcards.condition + "-v-" + wildcards.control + "/" + wildcards.status + "/" + wildcards.readtype + "/" + annotation + ".pdf" for annotation in FIGURES[wildcards.figure]["annotations"]],
         samplelist = plotcorrsamples,
-        upstream = lambda wildcards : config["annotations"][wildcards.annotation]["upstream"],
-        dnstream = lambda wildcards : config["annotations"][wildcards.annotation]["dnstream"],
-        pct_cutoff = lambda wildcards : config["annotations"][wildcards.annotation]["pct_cutoff"],
-        cluster = lambda wildcards : config["annotations"][wildcards.annotation]["cluster"],
-        nclust = lambda wildcards: config["annotations"][wildcards.annotation]["nclusters"],
-        heatmap_cmap = lambda wildcards : config["annotations"][wildcards.annotation]["heatmap_colormap"],
-        refpointlabel = lambda wildcards : config["annotations"][wildcards.annotation]["refpointlabel"],
-        ylabel = lambda wildcards : config["annotations"][wildcards.annotation]["ylabel"]
+        plottype = lambda wildcards: FIGURES[wildcards.figure]["parameters"]["type"],
+        readtype = lambda wildcards: "dyad signal" if wildcards.readtype=="midpoint" else "protection",
+        upstream = lambda wildcards: FIGURES[wildcards.figure]["parameters"]["upstream"],
+        dnstream = lambda wildcards: FIGURES[wildcards.figure]["parameters"]["dnstream"],
+        scaled_length = lambda wildcards: 0 if FIGURES[wildcards.figure]["parameters"]["type"]=="absolute" else FIGURES[wildcards.figure]["parameters"]["scaled_length"],
+        pct_cutoff = lambda wildcards: FIGURES[wildcards.figure]["parameters"]["pct_cutoff"],
+        trim_pct = lambda wildcards: FIGURES[wildcards.figure]["parameters"]["trim_pct"],
+        refpointlabel = lambda wildcards: FIGURES[wildcards.figure]["parameters"]["refpointlabel"],
+        endlabel = lambda wildcards:  "HAIL SATAN" if FIGURES[wildcards.figure]["parameters"]["type"]=="absolute" else FIGURES[wildcards.figure]["parameters"]["endlabel"],
+        cmap = lambda wildcards: FIGURES[wildcards.figure]["parameters"]["heatmap_colormap"],
+        sortmethod = lambda wildcards: FIGURES[wildcards.figure]["parameters"]["arrange"],
+        cluster_groups = lambda wildcards: FIGURES[wildcards.figure]["parameters"]["cluster_conditions"],
+        cluster_five = lambda wildcards: FIGURES[wildcards.figure]["parameters"]["cluster_five"],
+        cluster_three = lambda wildcards: FIGURES[wildcards.figure]["parameters"]["cluster_three"],
+        k = lambda wildcards: [v["n_clusters"] for k,v in FIGURES[wildcards.figure]["annotations"].items()],
     script:
-        "scripts/plot_mnase_heatmaps.R"
-
-rule plot_metagenes:
-    input:
-        qfrags =  "datavis/{annotation}/{norm}/allsamples-{annotation}-{readtype}-{norm}.tsv.gz"
-    output:
-        pmeta_group = "datavis/{annotation}/{norm}/{condition}-v-{control}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}_{readtype}-metagene-bygroup.svg",
-        pmeta_sample = "datavis/{annotation}/{norm}/{condition}-v-{control}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}_{readtype}-metagene-bysample.svg",
-        pmeta_goverlay = "datavis/{annotation}/{norm}/{condition}-v-{control}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}_{readtype}-metagene-groupoverlay.svg",
-        pmeta_soverlay = "datavis/{annotation}/{norm}/{condition}-v-{control}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}_{readtype}-metagene-sampleoverlayall.svg",
-        pmeta_soverlay_bygroup = "datavis/{annotation}/{norm}/{condition}-v-{control}/mnase-{annotation}-{norm}-{status}_{condition}-v-{control}_{readtype}-metagene-sampleoverlaybygroup.svg"
-    params:
-        samplelist = plotcorrsamples,
-        upstream = lambda wildcards : config["annotations"][wildcards.annotation]["upstream"],
-        dnstream = lambda wildcards : config["annotations"][wildcards.annotation]["dnstream"],
-        trim_pct = lambda wildcards : config["annotations"][wildcards.annotation]["trim_pct"],
-        refpointlabel = lambda wildcards : config["annotations"][wildcards.annotation]["refpointlabel"],
-        ylabel = lambda wildcards : config["annotations"][wildcards.annotation]["ylabel"]
-    script:
-        "scripts/plot_mnase_metagenes.R"
+        "scripts/plot_mnase_figures.R"
 
 rule group_bam_for_danpos:
     input:

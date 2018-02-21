@@ -106,13 +106,13 @@ cat_matrices:
     time : 30
     mem : 2000
 
-plot_heatmaps:
-    time : 20 
+plot_figures:
+    time : 40 
     mem : 10000
 
-plot_metagenes:
-    time : 20 
-    mem : 10000
+# plot_metagenes:
+#     time : 20 
+#     mem : 10000
 
 danpos:
     time: 60
