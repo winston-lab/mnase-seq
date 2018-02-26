@@ -46,7 +46,6 @@ rule all:
         expand(expand("qual_ctrl/{{status}}/{condition}-v-{control}/{condition}-v-{control}-mnase-{{status}}-window-{{windowsize}}-spikenorm-correlations.svg", zip, condition=conditiongroups_si+["all"], control=controlgroups_si+["all"]), status=["all","passing"], windowsize=config["corr-windowsizes"]) +
         expand(expand("qual_ctrl/{{status}}/{condition}-v-{control}/{condition}-v-{control}-mnase-{{status}}-window-{{windowsize}}-libsizenorm-correlations.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), status=["all","passing"], windowsize=config["corr-windowsizes"]) if sisamples else expand(expand("qual_ctrl/{{status}}/{condition}-v-{control}/{condition}-v-{control}-mnase-{{status}}-window-{{windowsize}}-libsizenorm-correlations.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), status=["all","passing"], windowsize=config["corr-windowsizes"]),
         #datavis
-        # expand("datavis/{figure}/{norm}/allsamples-allannotations-{readtype}-{norm}.tsv.gz", figure=FIGURES, norm=NORMS, readtype=["midpoint", "wholefrag"]),
         expand(expand("datavis/{{figure}}/spikenorm/{condition}-v-{control}/{{status}}/{{readtype}}/mnase-{{figure}}-spikenorm-{{status}}_{condition}-v-{control}_{{readtype}}-heatmap-bysample.svg", zip, condition=conditiongroups_si+["all"], control=controlgroups_si+["all"]), figure=FIGURES, readtype=["midpoint","wholefrag"], status=["all","passing"]) +
         expand(expand("datavis/{{figure}}/libsizenorm/{condition}-v-{control}/{{status}}/{{readtype}}/mnase-{{figure}}-libsizenorm-{{status}}_{condition}-v-{control}_{{readtype}}-heatmap-bysample.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), figure=FIGURES, readtype=["midpoint","wholefrag"], status=["all","passing"]) if sisamples else
         expand(expand("datavis/{{figure}}/libsizenorm/{condition}-v-{control}/{{status}}/{{readtype}}/mnase-{{figure}}-libsizenorm-{{status}}_{condition}-v-{control}_{{readtype}}-heatmap-bysample.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), figure=FIGURES, readtype=["midpoint","wholefrag"], status=["all","passing"]),
@@ -54,17 +53,17 @@ rule all:
         expand("nucleosome_calling/{condition}-v-{control}/reference_positions.xls", zip, condition=conditiongroups, control=controlgroups),
         expand("nucleosome_calling/{condition}-v-{control}/{condition}-v-{control}_dyad-shift-histogram.svg", zip, condition=conditiongroups, control=controlgroups)
 
-def plotcorrsamples(wildcards):
-    dd = SAMPLES if wildcards.status=="all" else PASSING
-    if wildcards.condition=="all":
-        if wildcards.norm=="libsizenorm": #condition==all,norm==lib
+def plotcorrsamples(wc):
+    dd = SAMPLES if wc.status=="all" else PASSING
+    if wc.condition=="all":
+        if wc.norm=="libsizenorm": #condition==all,norm==lib
             return list(dd.keys())
         else: #condition==all,norm==spike
             return [k for k,v in dd.items() if v["spikein"]=="y"]
-    elif wildcards.norm=="libsizenorm": #condition!=all;norm==lib
-        return [k for k,v in dd.items() if v["group"]==wildcards.control or v["group"]==wildcards.condition]
+    elif wc.norm=="libsizenorm": #condition!=all;norm==lib
+        return [k for k,v in dd.items() if v["group"]==wc.control or v["group"]==wc.condition]
     else: #condition!=all;norm==spike
-        return [k for k,v in dd.items() if (v["group"]==wildcards.control or v["group"]==wildcards.condition) and v["spikein"]=="y"]
+        return [k for k,v in dd.items() if (v["group"]==wc.control or v["group"]==wc.condition) and v["spikein"]=="y"]
 
 def cluster_samples(status, norm, cluster_groups):
     dd = SAMPLES if status=="all" else PASSING
@@ -111,12 +110,12 @@ rule fastqc_raw:
     threads : config["threads"]
     log : "logs/fastqc_raw/fastqc_raw-{sample}.log"
     run:
-        if wildcards.sample=="unmatched":
+        if wc.sample=="unmatched":
             shell("""(mkdir -p qual_ctrl/fastqc/raw) &> {log};
                     (fastqc -a {input.adapters} --nogroup --extract -t {threads} -o qual_ctrl/fastqc/raw {input.r1}) &>> {log};
                     (fastqc -a {input.adapters} --nogroup --extract -t {threads} -o qual_ctrl/fastqc/raw {input.r2}) &>> {log}""")
         else:
-            adapter = SAMPLES[wildcards.sample]["barcode"]
+            adapter = SAMPLES[wc.sample]["barcode"]
             shell("""(mkdir -p qual_ctrl/fastqc/raw) &> {log};
                     (fastqc -a <(echo -e "adapter\t{adapter}") --nogroup --extract -t {threads} -o qual_ctrl/fastqc/raw {input.r1}) &>> {log};
                     (fastqc -a <(echo -e "adapter\t{adapter}") --nogroup --extract -t {threads} -o qual_ctrl/fastqc/raw {input.r2}) &>> {log}""")
@@ -139,8 +138,8 @@ rule cutadapt:
         log = "logs/cutadapt/cutadapt-{sample}.log"
     params:
         qual_cutoff = config["cutadapt"]["qual_cutoff"],
-        adapter = lambda wildcards : SAMPLES[wildcards.sample]["barcode"]+"T",
-        max_len = lambda wildcards: config["read-length"] - len(SAMPLES[wildcards.sample]["barcode"]+"T"),
+        adapter = lambda wc : SAMPLES[wc.sample]["barcode"]+"T",
+        max_len = lambda wc: config["read-length"] - len(SAMPLES[wc.sample]["barcode"]+"T"),
     # threads: config["threads"]
     shell: """
         (cutadapt -e 0.15 -u 1 -G ^{params.adapter} -q {params.qual_cutoff} --minimum-length 5 --maximum-length {params.max_len} -o {output.r1} -p {output.r2} {input.r1} {input.r2}) &> {output.log}
@@ -153,7 +152,7 @@ rule fastqc_processed:
         r1 = "fastq/{fqtype}/{sample}-{fqtype}.r1.fastq.gz",
         r2 = "fastq/{fqtype}/{sample}-{fqtype}.r2.fastq.gz",
     params:
-        adapter= lambda wildcards: SAMPLES[wildcards.sample]["barcode"]
+        adapter= lambda wc: SAMPLES[wc.sample]["barcode"]
     output:
         "qual_ctrl/fastqc/{fqtype}/{sample}-{fqtype}.r1_fastqc/fastqc_data.txt",
         "qual_ctrl/fastqc/{fqtype}/{sample}-{fqtype}.r2_fastqc/fastqc_data.txt",
@@ -309,7 +308,7 @@ rule bam_separate_species:
         bai = "alignment/{sample}.bam.bai",
         chrsizes = config["combinedgenome"]["chrsizes"]
     params:
-        filterprefix = lambda wildcards: config["combinedgenome"]["spikein_prefix"] if wildcards.species==config["combinedgenome"]["experimental_prefix"] else config["combinedgenome"]["experimental_prefix"],
+        filterprefix = lambda wc: config["combinedgenome"]["spikein_prefix"] if wc.species==config["combinedgenome"]["experimental_prefix"] else config["combinedgenome"]["experimental_prefix"],
     output:
         "alignment/{sample}_{species}only.bam"
     threads: config["threads"]
@@ -347,10 +346,10 @@ rule get_fragments:
 
 rule midpoint_coverage:
     input:
-        bedpe = lambda wildcards: "alignment/fragments/" + wildcards.sample + "-" + config["combinedgenome"]["experimental_prefix"] + "fragments.bedpe" if wildcards.counttype=="counts" else "alignment/fragments/" + wildcards.sample + "-" + config["combinedgenome"]["spikein_prefix"] + "fragments.bedpe",
-        chrsizes = lambda wildcards: config["genome"]["chrsizes"] if wildcards.counttype=="counts" else config["genome"]["sichrsizes"]
+        bedpe = lambda wc: "alignment/fragments/" + wc.sample + "-" + config["combinedgenome"]["experimental_prefix"] + "fragments.bedpe" if wc.counttype=="counts" else "alignment/fragments/" + wc.sample + "-" + config["combinedgenome"]["spikein_prefix"] + "fragments.bedpe",
+        chrsizes = lambda wc: config["genome"]["chrsizes"] if wc.counttype=="counts" else config["genome"]["sichrsizes"]
     params:
-        prefix = lambda wildcards: config["combinedgenome"]["experimental_prefix"] if wildcards.counttype=="counts" else config["combinedgenome"]["spikein_prefix"]
+        prefix = lambda wc: config["combinedgenome"]["experimental_prefix"] if wc.counttype=="counts" else config["combinedgenome"]["spikein_prefix"]
     output:
         "coverage/{counttype,counts|sicounts}/{sample}-mnase-midpoint-{counttype}.bedgraph"
     log: "logs/midpoint_coverage/midpoint_coverage-{sample}-{counttype}.log"
@@ -379,14 +378,14 @@ rule plot_si_pct:
         plot = "qual_ctrl/{status}/{status}-spikein-plots.svg",
         stats = "qual_ctrl/{status}/{status}-spikein-stats.tsv"
     params:
-        samplelist = lambda wildcards : [k for k,v in sisamples.items() if v["spikein"]=="y"] if wildcards.status=="all" else [k for k,v in sipassing.items() if v["spikein"]=="y"],
+        samplelist = lambda wc : [k for k,v in sisamples.items() if v["spikein"]=="y"] if wc.status=="all" else [k for k,v in sipassing.items() if v["spikein"]=="y"],
         conditions = config["comparisons"]["spikenorm"]["conditions"],
         controls = config["comparisons"]["spikenorm"]["controls"],
     script: "scripts/plotsipct.R"
 
 rule whole_fragment_coverage:
     input:
-        bam = lambda wildcards: "alignment/" + wildcards.sample + "_" + config["combinedgenome"]["experimental_prefix"] + "only.bam" if wildcards.counttype=="counts" else "alignment/" + wildcards.sample + "_" + config["combinedgenome"]["spikein_prefix"] + "only.bam",
+        bam = lambda wc: "alignment/" + wc.sample + "_" + config["combinedgenome"]["experimental_prefix"] + "only.bam" if wc.counttype=="counts" else "alignment/" + wc.sample + "_" + config["combinedgenome"]["spikein_prefix"] + "only.bam",
     output:
         "coverage/{counttype}/{sample}-mnase-wholefrag-{counttype}.bedgraph"
     wildcard_constraints:
@@ -399,9 +398,9 @@ rule whole_fragment_coverage:
 rule normalize:
     input:
         coverage = "coverage/counts/{sample}-mnase-{readtype}-counts.bedgraph",
-        fragcounts = lambda wildcards: "coverage/counts/" + wildcards.sample + "-mnase-midpoint-counts.bedgraph" if wildcards.norm=="libsizenorm" else "coverage/sicounts/" + wildcards.sample + "-mnase-midpoint-sicounts.bedgraph"
+        fragcounts = lambda wc: "coverage/counts/" + wc.sample + "-mnase-midpoint-counts.bedgraph" if wc.norm=="libsizenorm" else "coverage/sicounts/" + wc.sample + "-mnase-midpoint-sicounts.bedgraph"
     params:
-        scalefactor = lambda wildcards: config["spikein-pct"] if wildcards.norm=="spikenorm" else 1
+        scalefactor = lambda wc: config["spikein-pct"] if wc.norm=="spikenorm" else 1
     output:
         "coverage/{norm}/{sample}-mnase-{readtype}-{norm}.bedgraph"
     wildcard_constraints:
@@ -439,7 +438,7 @@ rule plotcorrelations:
     output:
         "qual_ctrl/{status}/{condition}-v-{control}/{condition}-v-{control}-mnase-{status}-window-{windowsize}-{norm}-correlations.svg"
     params:
-        pcount = lambda wildcards: 0.01*int(wildcards.windowsize),
+        pcount = lambda wc: 0.01*int(wc.windowsize),
         samplelist = plotcorrsamples
     script:
         "scripts/plotcorr.R"
@@ -447,7 +446,7 @@ rule plotcorrelations:
 rule bg_to_bw:
     input:
         bedgraph = "coverage/{norm}/{sample}-mnase-{readtype}-{norm}.bedgraph",
-        chrsizes = lambda wildcards: config["genome"]["sichrsizes"] if wildcards.norm=="sicounts" else config["genome"]["chrsizes"]
+        chrsizes = lambda wc: config["genome"]["sichrsizes"] if wc.norm=="sicounts" else config["genome"]["chrsizes"]
     output:
         "coverage/{norm}/{sample}-mnase-{readtype}-{norm}.bw"
     log : "logs/bg_to_bw/bg_to_bw-{sample}-{readtype}-{norm}.log"
@@ -469,31 +468,35 @@ rule smoothed_midpoint_coverage:
 
 rule compute_matrix:
     input:
-        annotation = lambda wildcards: FIGURES[wildcards.figure]["annotations"][wildcards.annotation]["path"],
+        annotation = lambda wc: FIGURES[wc.figure]["annotations"][wc.annotation]["path"],
         bw = "coverage/{norm}/{sample}-mnase-{readtype}-{norm}.bw"
     output:
         dtfile = temp("datavis/{figure}/{norm}/{annotation}_{sample}-{readtype}-{norm}.mat.gz"),
         matrix = temp("datavis/{figure}/{norm}/{annotation}_{sample}-{readtype}-{norm}.tsv"),
         melted = temp("datavis/{figure}/{norm}/{annotation}_{sample}-{readtype}-{norm}-melted.tsv.gz")
     params:
-        group = lambda wildcards : SAMPLES[wildcards.sample]["group"],
-        refpoint = lambda wildcards: FIGURES[wildcards.figure]["parameters"]["refpoint"],
-        upstream = lambda wildcards: FIGURES[wildcards.figure]["parameters"]["upstream"] + FIGURES[wildcards.figure]["parameters"]["binsize"],
-        dnstream = lambda wildcards: FIGURES[wildcards.figure]["parameters"]["dnstream"] + FIGURES[wildcards.figure]["parameters"]["binsize"],
-        binsize = lambda wildcards: FIGURES[wildcards.figure]["parameters"]["binsize"],
-        binstat = lambda wildcards: FIGURES[wildcards.figure]["parameters"]["binstat"],
-        nan_afterend = lambda wildcards: "--nanAfterEnd" if FIGURES[wildcards.figure]["parameters"]["nan_afterend"] else [],
-        anno_label = lambda wildcards: FIGURES[wildcards.figure]["annotations"][wildcards.annotation]["label"]
+        group = lambda wc : SAMPLES[wc.sample]["group"],
+        refpoint = lambda wc: "TSS" if FIGURES[wc.figure]["parameters"]["type"]=="scaled" else FIGURES[wc.figure]["parameters"]["refpoint"],
+        upstream = lambda wc: FIGURES[wc.figure]["parameters"]["upstream"] + FIGURES[wc.figure]["parameters"]["binsize"],
+        dnstream = lambda wc: FIGURES[wc.figure]["parameters"]["dnstream"] + FIGURES[wc.figure]["parameters"]["binsize"],
+        scaled_length = lambda wc: 0 if FIGURES[wc.figure]["parameters"]["type"]=="absolute" else FIGURES[wc.figure]["parameters"]["scaled_length"],
+        binsize = lambda wc: FIGURES[wc.figure]["parameters"]["binsize"],
+        binstat = lambda wc: FIGURES[wc.figure]["parameters"]["binstat"],
+        nan_afterend = lambda wc: "--nanAfterEnd" if FIGURES[wc.figure]["parameters"]["nan_afterend"] and FIGURES[wc.figure]["parameters"]["type"]=="absolute" else [],
+        anno_label = lambda wc: FIGURES[wc.figure]["annotations"][wc.annotation]["label"]
     threads : config["threads"]
     log: "logs/compute_matrix/compute_matrix-{figure}_{annotation}_{sample}_{readtype}_{norm}.log"
     run:
-        shell("(computeMatrix reference-point -R {input.annotation} -S {input.bw} --referencePoint {params.refpoint} -out {output.dtfile} --outFileNameMatrix {output.matrix} -b {params.upstream} -a {params.dnstream} {params.nan_afterend} --binSize {params.binsize} --averageTypeBins {params.binstat} -p {threads}) &> {log}")
+        if FIGURES[wildcards.figure]["parameters"]["type"]=="absolute":
+            shell("""(computeMatrix reference-point -R {input.annotation} -S {input.bw} --referencePoint {params.refpoint} -out {output.dtfile} --outFileNameMatrix {output.matrix} -b {params.upstream} -a {params.dnstream} {params.nan_afterend} --binSize {params.binsize} --averageTypeBins {params.binstat} -p {threads}) &> {log}""")
+        else:
+            shell("""(computeMatrix scale-regions -R {input.annotation} -S {input.bw} -out {output.dtfile} --outFileNameMatrix {output.matrix} -m {params.scaled_length} -b {params.upstream} -a {params.dnstream} --binSize {params.binsize} --averageTypeBins {params.binstat} -p {threads}) &> {log}""")
         melt_upstream = params.upstream-params.binsize
         shell("""(Rscript scripts/melt_matrix.R -i {output.matrix} -r {params.refpoint} -g {params.group} -s {wildcards.sample} -a {params.anno_label} -b {params.binsize} -u {melt_upstream} -o {output.melted}) &>> {log}""")
 
 rule cat_matrices:
     input:
-        lambda wildcards: expand("datavis/{figure}/{norm}/{annotation}_{sample}-{readtype}-{norm}-melted.tsv.gz", annotation=[k for k,v in FIGURES[wildcards.figure]["annotations"].items()], sample=SAMPLES, figure=wildcards.figure, norm=wildcards.norm, readtype=wildcards.readtype)
+        lambda wc: expand("datavis/{figure}/{norm}/{annotation}_{sample}-{readtype}-{norm}-melted.tsv.gz", annotation=[k for k,v in FIGURES[wc.figure]["annotations"].items()], sample=SAMPLES, figure=wc.figure, norm=wc.norm, readtype=wc.readtype)
     output:
         "datavis/{figure}/{norm}/{figure}-allsamples-allannotations-{readtype}-{norm}.tsv.gz"
     log: "logs/cat_matrices/cat_matrices-{figure}-{readtype}-{norm}.log"
@@ -504,7 +507,7 @@ rule cat_matrices:
 rule plot_figures:
     input:
         matrix = "datavis/{figure}/{norm}/{figure}-allsamples-allannotations-{readtype}-{norm}.tsv.gz",
-        annotations = lambda wildcards: [v["path"] for k,v in FIGURES[wildcards.figure]["annotations"].items()]
+        annotations = lambda wc: [v["path"] for k,v in FIGURES[wc.figure]["annotations"].items()]
     output:
         heatmap_sample = "datavis/{figure}/{norm}/{condition}-v-{control}/{status}/{readtype}/mnase-{figure}-{norm}-{status}_{condition}-v-{control}_{readtype}-heatmap-bysample.svg",
         heatmap_group = "datavis/{figure}/{norm}/{condition}-v-{control}/{status}/{readtype}/mnase-{figure}-{norm}-{status}_{condition}-v-{control}_{readtype}-heatmap-bygroup.svg",
@@ -515,24 +518,25 @@ rule plot_figures:
         meta_group_clust = "datavis/{figure}/{norm}/{condition}-v-{control}/{status}/{readtype}/mnase-{figure}-{norm}-{status}_{condition}-v-{control}_{readtype}-metagene-bycluster-group.svg",
     params:
         # abusing snakemake a bit here...using params as output paths since in order to use lambda functions
-        annotations_out = lambda wildcards: ["datavis/" + wildcards.figure + "/" + wildcards.norm + "/" + wildcards.condition + "-v-" + wildcards.control + "/" + wildcards.status + "/" + wildcards.readtype + "/" + annotation + "_cluster-" + str(cluster) + ".bed" for annotation in FIGURES[wildcards.figure]["annotations"] for cluster in range(1, FIGURES[wildcards.figure]["annotations"][annotation]["n_clusters"]+1)],
-        clusters_out = lambda wildcards: ["datavis/" + wildcards.figure + "/" + wildcards.norm + "/" + wildcards.condition + "-v-" + wildcards.control + "/" + wildcards.status + "/" + wildcards.readtype + "/" + annotation + ".pdf" for annotation in FIGURES[wildcards.figure]["annotations"]],
+        annotations_out = lambda wc: ["datavis/" + wc.figure + "/" + wc.norm + "/" + wc.condition + "-v-" + wc.control + "/" + wc.status + "/" + wc.readtype + "/" + annotation + "_cluster-" + str(cluster) + ".bed" for annotation in FIGURES[wc.figure]["annotations"] for cluster in range(1, FIGURES[wc.figure]["annotations"][annotation]["n_clusters"]+1)],
+        clusters_out = lambda wc: ["datavis/" + wc.figure + "/" + wc.norm + "/" + wc.condition + "-v-" + wc.control + "/" + wc.status + "/" + wc.readtype + "/" + annotation + ".pdf" for annotation in FIGURES[wc.figure]["annotations"]],
         samplelist = plotcorrsamples,
-        plottype = lambda wildcards: FIGURES[wildcards.figure]["parameters"]["type"],
-        readtype = lambda wildcards: "dyad signal" if wildcards.readtype=="midpoint" else "protection",
-        upstream = lambda wildcards: FIGURES[wildcards.figure]["parameters"]["upstream"],
-        dnstream = lambda wildcards: FIGURES[wildcards.figure]["parameters"]["dnstream"],
-        scaled_length = lambda wildcards: 0 if FIGURES[wildcards.figure]["parameters"]["type"]=="absolute" else FIGURES[wildcards.figure]["parameters"]["scaled_length"],
-        pct_cutoff = lambda wildcards: FIGURES[wildcards.figure]["parameters"]["pct_cutoff"],
-        trim_pct = lambda wildcards: FIGURES[wildcards.figure]["parameters"]["trim_pct"],
-        refpointlabel = lambda wildcards: FIGURES[wildcards.figure]["parameters"]["refpointlabel"],
-        endlabel = lambda wildcards:  "HAIL SATAN" if FIGURES[wildcards.figure]["parameters"]["type"]=="absolute" else FIGURES[wildcards.figure]["parameters"]["endlabel"],
-        cmap = lambda wildcards: FIGURES[wildcards.figure]["parameters"]["heatmap_colormap"],
-        sortmethod = lambda wildcards: FIGURES[wildcards.figure]["parameters"]["arrange"],
-        cluster_samples = lambda wildcards: [] if FIGURES[wildcards.figure]["parameters"]["arrange"] != "cluster" else cluster_samples(wildcards.status, wildcards.norm, FIGURES[wildcards.figure]["parameters"]["cluster_conditions"]),
-        cluster_five = lambda wildcards: FIGURES[wildcards.figure]["parameters"]["cluster_five"],
-        cluster_three = lambda wildcards: FIGURES[wildcards.figure]["parameters"]["cluster_three"],
-        k = lambda wildcards: [v["n_clusters"] for k,v in FIGURES[wildcards.figure]["annotations"].items()],
+        plottype = lambda wc: FIGURES[wc.figure]["parameters"]["type"],
+        readtype = lambda wc: "dyad signal" if wc.readtype=="midpoint" else "protection",
+        upstream = lambda wc: FIGURES[wc.figure]["parameters"]["upstream"],
+        dnstream = lambda wc: FIGURES[wc.figure]["parameters"]["dnstream"],
+        scaled_length = lambda wc: 0 if FIGURES[wc.figure]["parameters"]["type"]=="absolute" else FIGURES[wc.figure]["parameters"]["scaled_length"],
+        pct_cutoff = lambda wc: FIGURES[wc.figure]["parameters"]["pct_cutoff"],
+        trim_pct = lambda wc: FIGURES[wc.figure]["parameters"]["trim_pct"],
+        refpointlabel = lambda wc: FIGURES[wc.figure]["parameters"]["refpointlabel"],
+        endlabel = lambda wc:  "HAIL SATAN" if FIGURES[wc.figure]["parameters"]["type"]=="absolute" else FIGURES[wc.figure]["parameters"]["endlabel"],
+        cmap = lambda wc: FIGURES[wc.figure]["parameters"]["heatmap_colormap"],
+        sortmethod = lambda wc: FIGURES[wc.figure]["parameters"]["arrange"],
+        cluster_scale = lambda wc: "FALSE" if FIGURES[wc.figure]["parameters"]["arrange"] != "cluster" else str(FIGURES[wc.figure]["parameters"]["cluster_scale"]).upper(),
+        cluster_samples = lambda wc: [] if FIGURES[wc.figure]["parameters"]["arrange"] != "cluster" else cluster_samples(wc.status, wc.norm, FIGURES[wc.figure]["parameters"]["cluster_conditions"]),
+        cluster_five = lambda wc: [] if FIGURES[wc.figure]["parameters"]["arrange"] != "cluster" else FIGURES[wc.figure]["parameters"]["cluster_five"],
+        cluster_three = lambda wc: [] if FIGURES[wc.figure]["parameters"]["arrange"] != "cluster" else FIGURES[wc.figure]["parameters"]["cluster_three"],
+        k = lambda wc: [v["n_clusters"] for k,v in FIGURES[wc.figure]["annotations"].items()],
     script:
         "scripts/plot_mnase_figures.R"
 

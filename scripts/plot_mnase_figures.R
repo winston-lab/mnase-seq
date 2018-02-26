@@ -7,9 +7,9 @@ library(ggthemes)
 library(gtable)
 
 main = function(in_paths, samplelist, anno_paths, ptype, readtype, upstream, dnstream, scaled_length, pct_cutoff,
-                trim_pct, refptlabel, endlabel, cmap, sortmethod, cluster_samples, cluster_five, cluster_three, k,
-                heatmap_sample_out, heatmap_group_out, meta_sample_out, meta_sample_overlay_out,
-                meta_group_out, meta_sampleclust_out, meta_groupclust_out, anno_out, cluster_out){
+                trim_pct, refptlabel, endlabel, cmap, sortmethod, cluster_scale, cluster_samples, cluster_five, cluster_three, k,
+                heatmap_sample_out, heatmap_group_out, meta_sample_out, meta_sample_overlay_out, meta_group_out, meta_sampleclust_out, meta_groupclust_out,
+                anno_out, cluster_out){
     
     hmap_ybreaks = function(limits){
         if (max(limits)-min(limits) >= 2000){
@@ -23,19 +23,22 @@ main = function(in_paths, samplelist, anno_paths, ptype, readtype, upstream, dns
         }
     }
     
-    hmap = function(df){
+    hmap = function(df, flimit){
         heatmap_base = ggplot(data = df) +
             geom_vline(xintercept = 0, size=1.5)
         if (ptype=="scaled"){
             heatmap_base = heatmap_base +
                 geom_vline(xintercept = scaled_length/1000, size=1.5)
         }
+        
         heatmap_base = heatmap_base +
             geom_raster(aes(x=position, y=new_index, fill=cpm), interpolate=FALSE) +
-            scale_y_reverse(expand=c(0.005,5), breaks=hmap_ybreaks) +
-            scale_fill_viridis(option = cmap, na.value="#FFFFFF00", name='MNase-seq dyad signal',
+            scale_fill_viridis(option = cmap, na.value="#FFFFFF00",
+                               name= if(readtype=="midpoint"){"MNase-seq dyad signal"} else {"MNase-seq protection"},
+                               limits = c(NA, flimit), oob=scales::squish,
                                guide=guide_colorbar(title.position="top",
                                                     barwidth=20, barheight=1, title.hjust=0.5)) +
+            scale_y_reverse(expand=c(0.005,5), breaks=hmap_ybreaks) +
             theme_minimal() +
             theme(text = element_text(size=16, face="bold", color="black"),
                   legend.position = "top",
@@ -80,24 +83,22 @@ main = function(in_paths, samplelist, anno_paths, ptype, readtype, upstream, dns
     
     meta = function(df, groupvar="sample"){
         if (groupvar=="sample"){
-            metagene = ggplot(data = df, aes(x=position, y=mean, ymin=mean-1.96*sem,
-                                             ymax=mean+1.96*sem, group=sample,
+            metagene = ggplot(data = df, aes(x=position, group=sample,
                                              color=group, fill=group))
         }
         else if (groupvar=="group"){
-            metagene = ggplot(data = df, aes(x=position, y=mean, ymin=mean-1.96*sem,
-                                             ymax=mean+1.96*sem, group=group,
+            metagene = ggplot(data = df, aes(x=position, group=group,
                                              color=group, fill=group))
         }
         else if (groupvar=="sampleclust"){
             metagene = ggplot(data = df %>% mutate(sampleclustid = paste(sample, cluster)),
-                              aes(x=position, y=mean, ymin=mean-1.96*sem, ymax=mean+1.96*sem,
-                                  group=sampleclustid, color=factor(cluster), fill=factor(cluster)))
+                              aes(x=position, group=sampleclustid,
+                                  color=factor(cluster), fill=factor(cluster)))
         }
         else if (groupvar=="groupclust"){
             metagene = ggplot(data = df %>% mutate(groupclustid = paste(group, cluster)),
-                              aes(x=position, y=mean, ymin=mean-1.96*sem, ymax=mean+1.96*sem,
-                                  group=groupclustid, color=factor(cluster), fill=factor(cluster)))
+                              aes(x=position, group=groupclustid,
+                                  color=factor(cluster), fill=factor(cluster)))
         }
         
         metagene = metagene +
@@ -106,13 +107,15 @@ main = function(in_paths, samplelist, anno_paths, ptype, readtype, upstream, dns
             metagene = metagene +
                 geom_vline(xintercept = scaled_length/1000, size=1, color="grey65") 
         }
+        
         metagene = metagene +
-            geom_ribbon(alpha=0.4, size=0) +
-            geom_line() +
+            geom_ribbon(aes(ymin=mean-1.96*sem, ymax=mean+1.96*sem),
+                        alpha=0.4, size=0) +
+            geom_line(aes(y=mean)) +
             scale_y_continuous(limits = c(NA, NA), name="normalized counts") +
             scale_color_ptol(guide=guide_legend(label.position="top", label.hjust=0.5)) +
             scale_fill_ptol() +
-            ggtitle(paste("MNase-seq", readtype)) +
+            ggtitle(if(readtype=="midpoint"){"MNase-seq dyad signal"} else {"MNase-seq protection"}) + 
             theme_light() +
             theme(text = element_text(size=12, color="black", face="bold"),
                   axis.text = element_text(size=12, color="black"),
@@ -146,6 +149,11 @@ main = function(in_paths, samplelist, anno_paths, ptype, readtype, upstream, dns
                                    name="scaled distance",
                                    limits = c(-upstream/1000, (scaled_length+dnstream)/1000),
                                    expand=c(0,0))
+        }
+        if (groupvar %in% c("sampleclust", "groupclust")){
+            metagene = metagene +
+                scale_color_colorblind(guide=guide_legend(label.position="top", label.hjust=0.5)) +
+                scale_fill_colorblind()
         }
         return(metagene)
     }
@@ -220,8 +228,13 @@ main = function(in_paths, samplelist, anno_paths, ptype, readtype, upstream, dns
         return(new_grob)
     }
     
-    nest_top_facets = function(ggp, level=2){
-        og_grob = ggplotGrob(ggp)
+    nest_top_facets = function(ggp, level=2, inner="cluster", intype="gg"){
+        if (intype=="gg"){
+            og_grob = ggplotGrob(ggp)
+        }
+        else if (intype=="gtable"){
+            og_grob = ggp
+        }
         strip_loc = grep("strip-t", og_grob[["layout"]][["name"]])
         strip = gtable_filter(og_grob, "strip-t", trim=FALSE)
         strip_widths = gtable_filter(og_grob, "strip-t")[["widths"]]
@@ -236,26 +249,42 @@ main = function(in_paths, samplelist, anno_paths, ptype, readtype, upstream, dns
         facet_grob = gtable_matrix("toprow", grobs=mat,
                                    heights=unit(rep(1,level), "null"),
                                    widths=strip_widths)
-        
-        anno_grob_indices = 1+lag(k, default=0)
-        for (anno_idx in 1:n_anno){
+        if (inner=="cluster"){
+            outer_grob_indices = 1+lag(k, default=0)
+            n_outer = n_anno
+        }
+        else if (inner=="strand"){
+            outer_grob_indices = seq(1, n_groups*2, 2)  
+            n_outer = n_groups
+        }
+        for (idx in 1:n_outer){
+            if (inner=="cluster"){
+                l=((k[idx]*2))*(idx-1)+1
+                r=((k[idx]*2))*(idx)-1
+            }
+            else if (inner=="strand"){
+                l=4*(idx-1)+1
+                r=4*(idx)-1
+            }
             facet_grob = facet_grob %>%
-                gtable_add_grob(grobs = og_grob$grobs[[strip_loc[anno_grob_indices[anno_idx]]]]$grobs[[1]],
-                                l=((k[anno_idx]*2))*(anno_idx-1)+1,
-                                r=((k[anno_idx]*2))*(anno_idx)-1,
-                                t=1, b=1)
+                gtable_add_grob(grobs = og_grob$grobs[[strip_loc[outer_grob_indices[idx]]]]$grobs[[1]],
+                                l=l, r=r, t=1, b=1)
         }
         new_grob = gtable_add_grob(og_grob, facet_grob, t=strip_y, r=strip_r, l=strip_l, b=strip_y, name='rstrip')
         return(new_grob)
     }
     
-    df = read_tsv(in_paths, col_names=c("group", "sample", "annotation", "index", "position","cpm")) %>%
-        filter((sample %in% samplelist | sample %in% cluster_samples) & !is.na(cpm)) %>% 
+    import = function(path){
+        read_tsv(path, col_names=c("group", "sample", "annotation", "index", "position","cpm")) %>%
+            filter((sample %in% samplelist | sample %in% cluster_samples) & !is.na(cpm))
+    }
+    
+    df = import(in_paths[1]) %>%
         group_by(annotation) %>% 
         mutate(annotation_labeled = paste(n_distinct(index), annotation)) %>% 
         ungroup() %>% 
         mutate(annotation = annotation_labeled) %>% 
-        select(-annotation_labeled) %>% 
+        select(-annotation_labeled)%>% 
         mutate_at(vars(group, sample, annotation), funs(fct_inorder(., ordered=TRUE)))
     
     #get replicate info for sample facetting
@@ -287,7 +316,13 @@ main = function(in_paths, samplelist, anno_paths, ptype, readtype, upstream, dns
         #cluster for each annotation
         for (i in 1:length(annotations)){
             rr = df %>% filter(annotation==annotations[i] & sample %in% cluster_samples &
-                                   between(position, cluster_five/1000, cluster_three/1000)) %>% 
+                                   between(position, cluster_five/1000, cluster_three/1000))
+            if (cluster_scale){
+                rr = rr %>% 
+                    group_by(group, sample, annotation, index, replicate) %>%
+                    mutate(cpm = scales::squish(cpm)) %>% ungroup()
+            }
+            rr = rr %>% 
                 select(-c(group, annotation, replicate)) %>% 
                 unite(cid, c(sample, position), sep="~") %>%
                 spread(cid, cpm, fill=0) %>%
@@ -365,19 +400,18 @@ main = function(in_paths, samplelist, anno_paths, ptype, readtype, upstream, dns
         }
     }
     
-    sample_cutoff = quantile(df[["cpm"]], probs=pct_cutoff, na.rm=TRUE)
-    df_sample = df %>% mutate(cpm = pmin(sample_cutoff, cpm),
-                              replicate = fct_inorder(paste("replicate", replicate), ordered=TRUE),
-                              cluster = fct_inorder(paste("cluster", cluster), ordered=TRUE))
+    df_sample = df %>%
+        mutate(replicate = fct_inorder(paste("replicate", replicate), ordered=TRUE),
+               cluster = fct_inorder(paste("cluster", cluster), ordered=TRUE))
+    sample_cutoff= df_sample %>% pull(cpm) %>% quantile(probs=pct_cutoff, na.rm=TRUE)
     
     df_group = df %>% group_by(group, annotation, position, cluster, new_index) %>%
-        summarise(cpm = mean(cpm)) %>% ungroup()
-    group_cutoff = quantile(df_group[["cpm"]], probs=pct_cutoff, na.rm=TRUE)
-    df_group = df_group %>% mutate(cpm = pmin(group_cutoff, cpm),
-                                   cluster = fct_inorder(paste("cluster", cluster), ordered=TRUE))
+        summarise(cpm = mean(cpm)) %>% ungroup() %>%
+        mutate(cluster = fct_inorder(paste("cluster", cluster), ordered=TRUE))
+    group_cutoff = df_group %>% pull(cpm) %>% quantile(probs=pct_cutoff, na.rm=TRUE)
     
-    heatmap_sample = hmap(df_sample)
-    heatmap_group = hmap(df_group)
+    heatmap_sample = hmap(df_sample, sample_cutoff)
+    heatmap_group = hmap(df_group, group_cutoff)
     if (n_anno==1 && max(k)==1){
         heatmap_sample = heatmap_sample +
             ylab(annotations[1]) +
@@ -431,78 +465,59 @@ main = function(in_paths, samplelist, anno_paths, ptype, readtype, upstream, dns
     ggsave(heatmap_sample_out, plot=heatmap_sample, width=2+9*n_groups, height=10+10*max_reps, units="cm", limitsize=FALSE)
     ggsave(heatmap_group_out, plot=heatmap_group, width=2+9*n_groups, height=30, units="cm", limitsize=FALSE)
     
-    if (sortmethod=="cluster"){
-        metadf_sample = df %>%
-            group_by(group, sample, annotation, position, cluster, replicate) %>%
-            summarise(mean = winsor.mean(cpm, trim=trim_pct),
-                      sem = winsor.sd(cpm, trim=trim_pct)/sqrt(n())) %>% 
-            ungroup() %>% arrange(cluster) %>% 
-            mutate(cluster = fct_inorder(paste("cluster", cluster), ordered=TRUE)) %>% 
-            arrange(replicate) %>% 
-            mutate(replicate = fct_inorder(paste("replicate", replicate), ordered=TRUE))
-        
-        metadf_group = df %>% group_by(group, annotation, position, cluster) %>% 
-            summarise(mean = winsor.mean(cpm, trim=trim_pct),
-                      sem = winsor.sd(cpm, trim=trim_pct)/sqrt(n())) %>%
-            ungroup() %>% arrange(cluster) %>% 
-            mutate(cluster = fct_inorder(paste("cluster", cluster), ordered=TRUE))
-    }
-    else {
-        metadf_sample = df %>%
-            group_by(group, sample, annotation, position, replicate, cluster) %>% 
-            summarise(mean = winsor.mean(cpm, trim=trim_pct),
-                      sem = winsor.sd(cpm, trim=trim_pct)/sqrt(n())) %>% 
-            ungroup() %>% arrange(replicate) %>% 
-            mutate(replicate = fct_inorder(paste("replicate", replicate), ordered=TRUE))
-        
-        metadf_group = df %>% group_by(group, annotation, position, cluster) %>% 
-            summarise(mean = winsor.mean(cpm, trim=trim_pct),
-                      sem = winsor.sd(cpm, trim=trim_pct)/sqrt(n())) %>%
-            ungroup()
-    }
+    metadf_sample = df %>%
+        group_by(group, sample, annotation, position, cluster, replicate) %>%
+        summarise(mean = winsor.mean(cpm, trim=trim_pct),
+                  sem = winsor.sd(cpm, trim=trim_pct)/sqrt(n())) %>% 
+        ungroup() %>% arrange(replicate) %>% 
+        mutate(replicate = fct_inorder(paste("replicate", replicate), ordered=TRUE)) %>%
+        arrange(cluster) %>%
+        mutate(cluster = fct_inorder(paste("cluster", cluster), ordered=TRUE))
+    
+    metadf_group = df %>% group_by(group, annotation, position, cluster) %>% 
+        summarise(mean = winsor.mean(cpm, trim=trim_pct),
+                  sem = winsor.sd(cpm, trim=trim_pct)/sqrt(n())) %>% 
+        ungroup() %>%
+        arrange(cluster) %>%
+        mutate(cluster = fct_inorder(paste("cluster", cluster), ordered=TRUE))
    
     meta_sample = meta(metadf_sample)
     meta_group = meta(metadf_group, groupvar="group")
-    meta_sampleclust = meta(metadf_sample, groupvar="sampleclust") +
-        scale_color_colorblind(guide=guide_legend(label.position="top", label.hjust=0.5)) +
-        scale_fill_colorblind()
-    meta_groupclust = meta(metadf_group, groupvar="groupclust") +
-        scale_color_colorblind(guide=guide_legend(label.position="top", label.hjust=0.5)) +
-        scale_fill_colorblind()
-        facet_grid(annotation~group, labeller=label_context)
+    meta_sampleclust = meta(metadf_sample, groupvar="sampleclust")
+    meta_groupclust = meta(metadf_group, groupvar="groupclust")
     if (n_anno==1 && max(k)==1){
         meta_sample = meta_sample +
             scale_color_manual(values=rep("#4477AA", 100)) +
             scale_fill_manual(values=rep("#4477AA", 100)) +
             facet_grid(replicate~group) +
-            ggtitle(paste("MNase-seq", readtype),
+            ggtitle(if(readtype=="midpoint"){"MNase-seq dyad signal"} else {"MNase-seq protection"},
                     subtitle = annotations[1]) +
             theme(legend.position="none")
         
-        meta_sample_overlay = meta(metadf_sample) +
+        meta_sample_overlay = meta(df) +
             scale_color_ptol() +
-            ggtitle(paste("MNase-seq", readtype),
+            ggtitle(if(readtype=="midpoint"){"MNase-seq dyad signal"} else {"MNase-seq protection"},
                     subtitle = annotations[1]) +
             theme(legend.position="right",
                   legend.key.width=unit(0.8, "cm"))
         
         meta_group = meta_group +
             scale_color_ptol() +
-            ggtitle(paste("MNase-seq", readtype),
+            ggtitle(if(readtype=="midpoint"){"MNase-seq dyad signal"} else {"MNase-seq protection"},
                     subtitle = annotations[1]) +
             theme(legend.position="right",
                   legend.key.width=unit(0.8, "cm"))
         
         meta_sampleclust = meta_sampleclust +
             facet_grid(. ~ group) +
-            ggtitle(paste("MNase-seq", readtype),
+            ggtitle(if(readtype=="midpoint"){"MNase-seq dyad signal"} else {"MNase-seq protection"},
                     subtitle = annotations[1]) +
             theme(legend.position="right",
                   legend.key.width=unit(1, "cm"))
         
         meta_groupclust = meta_groupclust +
             facet_grid(. ~ group) +
-            ggtitle(paste("MNase-seq", readtype),
+            ggtitle(if(readtype=="midpoint"){"MNase-seq dyad signal"} else {"MNase-seq protection"},
                     subtitle = annotations[1]) +
             theme(legend.position="right",
                   legend.key.width=unit(1, "cm"))
@@ -514,20 +529,15 @@ main = function(in_paths, samplelist, anno_paths, ptype, readtype, upstream, dns
         ggsave(meta_groupclust_out, plot = meta_groupclust, width=6+7*n_groups, height=10, units="cm", limitsize=FALSE)
     }
     else if (n_anno>1 && max(k)==1){
-        meta_sample = meta_sample +
-            facet_grid(replicate ~ annotation)
+        meta_sample = meta_sample + facet_grid(replicate ~ annotation)
         
-        meta_sample_overlay = meta_sample +
-            facet_grid(.~annotation)
+        meta_sample_overlay = meta_sample + facet_grid(.~annotation)
         
-        meta_group = meta_group +
-            facet_grid(.~annotation)
+        meta_group = meta_group + facet_grid(.~annotation)
         
-        meta_sampleclust = meta_sampleclust +
-            facet_grid(annotation ~ group)
+        meta_sampleclust = meta_sampleclust + facet_grid(annotation ~ group)
         
-        meta_groupclust = meta_groupclust +
-            facet_grid(annotation ~group )
+        meta_groupclust = meta_groupclust + facet_grid(annotation ~ group)
     }
     else if (max(k)>1){
         meta_sample = meta_sample +
@@ -535,18 +545,14 @@ main = function(in_paths, samplelist, anno_paths, ptype, readtype, upstream, dns
             theme(strip.background = element_rect(fill="white", size=0))
         meta_sample = meta_sample %>% nest_top_facets(level=2)
         
-        meta_sample_overlay = meta(metadf_sample) +
-            facet_grid(cluster ~ annotation)
+        meta_sample_overlay = meta(metadf_sample) + facet_grid(cluster ~ annotation)
         
-        meta_group = meta_group +
-            facet_grid(cluster ~ annotation)
+        meta_group = meta_group + facet_grid(cluster ~ annotation)
         
-        meta_sampleclust = meta_sampleclust +
-            facet_grid(annotation ~ group) +
+        meta_sampleclust = meta_sampleclust + facet_grid(annotation ~ group) +
             theme(legend.key.width=unit(2, "cm"))
         
-        meta_groupclust = meta_groupclust +
-            facet_grid(annotation ~ group) +
+        meta_groupclust = meta_groupclust + facet_grid(annotation ~ group) +
             theme(legend.key.width=unit(2, "cm"))
     }
     
@@ -563,7 +569,7 @@ main(in_paths = snakemake@input[["matrix"]],
      samplelist = snakemake@params[["samplelist"]],
      anno_paths = snakemake@input[["annotations"]],
      ptype = snakemake@params[["plottype"]], 
-     readtype = snakemake@params[["readtype"]],
+     readtype = snakemake@wildcards[["readtype"]],
      upstream = snakemake@params[["upstream"]],
      dnstream = snakemake@params[["dnstream"]],
      scaled_length = snakemake@params[["scaled_length"]], 
@@ -573,7 +579,8 @@ main(in_paths = snakemake@input[["matrix"]],
      endlabel = snakemake@params[["endlabel"]],
      cmap = snakemake@params[["cmap"]],
      sortmethod = snakemake@params[["sortmethod"]],
-     cluster_samples = snakemake@params[["cluster_samples"]],
+     cluster_scale = snakemake@params[["cluster_scale"]], 
+     cluster_samples = snakemake@params[["cluster_samples"]]
      cluster_five = snakemake@params[["cluster_five"]],
      cluster_three = snakemake@params[["cluster_three"]],
      k = snakemake@params[["k"]],
@@ -585,4 +592,4 @@ main(in_paths = snakemake@input[["matrix"]],
      meta_sampleclust_out = snakemake@output[["meta_sample_clust"]],
      meta_groupclust_out = snakemake@output[["meta_group_clust"]],
      anno_out = snakemake@params[["annotations_out"]],
-     cluster_out = snakemake@params[["clusters_out"]])
+     cluster_out = snakemake@params[["cluster_out"]])
