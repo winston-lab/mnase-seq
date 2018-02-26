@@ -110,12 +110,12 @@ rule fastqc_raw:
     threads : config["threads"]
     log : "logs/fastqc_raw/fastqc_raw-{sample}.log"
     run:
-        if wc.sample=="unmatched":
+        if wildcards.sample=="unmatched":
             shell("""(mkdir -p qual_ctrl/fastqc/raw) &> {log};
                     (fastqc -a {input.adapters} --nogroup --extract -t {threads} -o qual_ctrl/fastqc/raw {input.r1}) &>> {log};
                     (fastqc -a {input.adapters} --nogroup --extract -t {threads} -o qual_ctrl/fastqc/raw {input.r2}) &>> {log}""")
         else:
-            adapter = SAMPLES[wc.sample]["barcode"]
+            adapter = SAMPLES[wildcards.sample]["barcode"]
             shell("""(mkdir -p qual_ctrl/fastqc/raw) &> {log};
                     (fastqc -a <(echo -e "adapter\t{adapter}") --nogroup --extract -t {threads} -o qual_ctrl/fastqc/raw {input.r1}) &>> {log};
                     (fastqc -a <(echo -e "adapter\t{adapter}") --nogroup --extract -t {threads} -o qual_ctrl/fastqc/raw {input.r2}) &>> {log}""")
