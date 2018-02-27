@@ -494,7 +494,7 @@ main = function(in_paths, samplelist, anno_paths, ptype, readtype, upstream, dns
                     subtitle = annotations[1]) +
             theme(legend.position="none")
         
-        meta_sample_overlay = meta(df) +
+        meta_sample_overlay = meta(metadf_sample) +
             scale_color_ptol() +
             ggtitle(if(readtype=="midpoint"){"MNase-seq dyad signal"} else {"MNase-seq protection"},
                     subtitle = annotations[1]) +
