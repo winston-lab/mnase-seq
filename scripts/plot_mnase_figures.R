@@ -320,7 +320,7 @@ main = function(in_paths, samplelist, anno_paths, ptype, readtype, upstream, dns
             if (cluster_scale){
                 rr = rr %>% 
                     group_by(group, sample, annotation, index, replicate) %>%
-                    mutate(cpm = scales::squish(cpm)) %>% ungroup()
+                    mutate(cpm = scales::rescale(cpm)) %>% ungroup()
             }
             rr = rr %>% 
                 select(-c(group, annotation, replicate)) %>% 
