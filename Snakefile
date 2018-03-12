@@ -19,6 +19,7 @@ COUNTTYPES = ["counts", "sicounts"] if sisamples else ["counts"]
 NORMS = ["libsizenorm", "spikenorm"] if sisamples else ["libsizenorm"]
 
 FIGURES = config["figures"]
+QUANT = config["quantification"]
 
 localrules: all,
             make_barcode_file,
@@ -26,6 +27,8 @@ localrules: all,
             samtools_index,
             cat_matrices,
             group_bam_for_danpos,
+            danpos_over_annotations,
+            cat_danpos_annotations
 
 rule all:
     input:
@@ -51,7 +54,9 @@ rule all:
         expand(expand("datavis/{{figure}}/libsizenorm/{condition}-v-{control}/{{status}}/{{readtype}}/mnase-{{figure}}-libsizenorm-{{status}}_{condition}-v-{control}_{{readtype}}-heatmap-bysample.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), figure=FIGURES, readtype=["midpoint","wholefrag"], status=["all","passing"]),
         #call nucleosomes 
         expand("nucleosome_calling/{condition}-v-{control}/reference_positions.xls", zip, condition=conditiongroups, control=controlgroups),
-        expand("nucleosome_calling/{condition}-v-{control}/{condition}-v-{control}_dyad-shift-histogram.svg", zip, condition=conditiongroups, control=controlgroups)
+        expand("nucleosome_calling/{condition}-v-{control}/{condition}-v-{control}_dyad-shift-histogram.svg", zip, condition=conditiongroups, control=controlgroups),
+        #danpos over annotations
+        expand(expand("nucleosome_calling/regions/{{figure}}/{condition}-v-{control}/{{figure}}-allannotations-individual.tsv", zip, condition=conditiongroups, control=controlgroups), figure=QUANT)
 
 def plotcorrsamples(wc):
     dd = SAMPLES if wc.status=="all" else PASSING
@@ -588,3 +593,42 @@ rule plot_danpos_results:
         fuzziness_ecdf = "nucleosome_calling/{condition}-v-{control}/{condition}-v-{control}_fuzziness-ecdf.svg"
     script:
         "scripts/nucleosomes.R"
+
+rule danpos_over_annotations:
+    input:
+        indiv_condition = "nucleosome_calling/{condition}-v-{control}/pooled/nucleosome_calling_data_{condition}.Fnor.smooth.positions.xls",
+        indiv_control = "nucleosome_calling/{condition}-v-{control}/pooled/nucleosome_calling_data_{control}.Fnor.smooth.positions.xls",
+        integrated = "nucleosome_calling/{condition}-v-{control}/nucleosome_calling_data_{condition}-nucleosome_calling_data_{control}.positions.integrative.xls",
+        annotation = lambda wc: QUANT[wc.figure]["annotations"][wc.annotation]["path"],
+        chrsizes = config["genome"]["chrsizes"]
+    params:
+        upstream = lambda wc: QUANT[wc.figure]["upstream"],
+        dnstream = lambda wc: QUANT[wc.figure]["dnstream"],
+        label = lambda wc: QUANT[wc.figure]["annotations"][wc.annotation]["label"]
+    output:
+        individual = temp("nucleosome_calling/regions/{figure}/{condition}-v-{control}/{figure}_{annotation}-individual.tsv"),
+        integrated = temp("nucleosome_calling/regions/{figure}/{condition}-v-{control}/{figure}_{annotation}-integrated.tsv")
+    shell: """
+        bedtools slop -i {input.annotation} -g {input.chrsizes} -l {params.upstream} -r {params.dnstream} -s | bedtools intersect -a stdin -b <(awk 'BEGIN{{FS=OFS="\t"}} NR>1 && $2>0' {input.indiv_control}) -wo | awk 'BEGIN{{FS=OFS="\t"}}{{print $0, "{wildcards.control}", "{params.label}"}}' | \
+        cat - <(bedtools slop -i {input.annotation} -g {input.chrsizes} -l {params.upstream} -r {params.dnstream} -s | bedtools intersect -a stdin -b <(awk 'BEGIN{{FS=OFS="\t"}} NR>1 && $2>0' {input.indiv_condition}) -wo | awk 'BEGIN{{FS=OFS="\t"}}{{print $0, "{wildcards.condition}", "{params.label}"}}') > {output.individual}
+        bedtools slop -i {input.annotation} -g {input.chrsizes} -l {params.upstream} -r {params.dnstream} -s | bedtools intersect -a stdin -b <(awk 'BEGIN{{FS=OFS="\t"}} NR>1 && $2>0' {input.integrated}) -wo | awk 'BEGIN{{FS=OFS="\t"}}{{print $0, "{params.label}"}}'> {output.integrated}
+        """
+
+rule cat_danpos_annotations:
+    input:
+        individual = lambda wc: expand("nucleosome_calling/regions/{figure}/{condition}-v-{control}/{figure}_{annotation}-individual.tsv", annotation=[k for k,v in QUANT[wc.figure]["annotations"].items()], condition=wc.condition, control=wc.control, figure=wc.figure),
+        integrated = lambda wc: expand("nucleosome_calling/regions/{figure}/{condition}-v-{control}/{figure}_{annotation}-integrated.tsv", annotation=[k for k,v in QUANT[wc.figure]["annotations"].items()], condition=wc.condition, control=wc.control, figure=wc.figure)
+    output:
+        individual = "nucleosome_calling/regions/{figure}/{condition}-v-{control}/{figure}-allannotations-individual.tsv",
+        integrated = "nucleosome_calling/regions/{figure}/{condition}-v-{control}/{figure}-allannotations-integrated.tsv",
+    shell: """
+        cat <(echo -e "chrom\tfeat_start\tfeat_end\tfeat_name\tfeat_score\tfeat_strand\tnuc_start\tnuc_end\tnuc_summit\toccupancy\tfuzziness\tgroup\tannotation") <(cut -f7,13 --complement {input.individual}) > {output.individual}
+        cat <(echo -e "feat_chrom\tfeat_start\tfeat_end\tfeat_name\tfeat_score\tfeat_strand\tnuc_chrom\tnuc_start\tnuc_end\tnuc_center\tctrl_summit_loc\tcond_summit_loc\tdiff_summit_loc\tcond_ctrl_dist\tctrl_summit_val\tcond_summit_val\tsummit_lfc\tsummit_diff_logpval\tsummit_diff_fdr\tctrl_point_val\tcond_point_val\tpoint_lfc\tpoint_diff_logpval\tpoint_diff_fdr\tctrl_fuzziness\tcond_fuzziness\tfuzziness_lfc\tfuzziness_diff_logpval\tfuzziness_diff_fdr\toverlap\tannotation") {input.integrated} >  {output.integrated}
+        """
+
+
+
+
+
+
+
