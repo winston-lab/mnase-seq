@@ -56,7 +56,7 @@ rule all:
         expand("nucleosome_calling/{condition}-v-{control}/reference_positions.xls", zip, condition=conditiongroups, control=controlgroups),
         expand("nucleosome_calling/{condition}-v-{control}/{condition}-v-{control}_dyad-shift-histogram.svg", zip, condition=conditiongroups, control=controlgroups),
         #danpos over annotations
-        expand(expand("nucleosome_calling/regions/{{figure}}/{condition}-v-{control}/{{figure}}-allannotations-individual.tsv", zip, condition=conditiongroups, control=controlgroups), figure=QUANT)
+        expand(expand("nucleosome_calling/regions/{{figure}}/{condition}-v-{control}/{{figure}}-{condition}-v-{control}-individual-occupancy-heatmaps.svg", zip, condition=conditiongroups, control=controlgroups), figure=QUANT)
 
 def plotcorrsamples(wc):
     dd = SAMPLES if wc.status=="all" else PASSING
@@ -626,9 +626,37 @@ rule cat_danpos_annotations:
         cat <(echo -e "feat_chrom\tfeat_start\tfeat_end\tfeat_name\tfeat_score\tfeat_strand\tnuc_chrom\tnuc_start\tnuc_end\tnuc_center\tctrl_summit_loc\tcond_summit_loc\tdiff_summit_loc\tcond_ctrl_dist\tctrl_summit_val\tcond_summit_val\tsummit_lfc\tsummit_diff_logpval\tsummit_diff_fdr\tctrl_point_val\tcond_point_val\tpoint_lfc\tpoint_diff_logpval\tpoint_diff_fdr\tctrl_fuzziness\tcond_fuzziness\tfuzziness_lfc\tfuzziness_diff_logpval\tfuzziness_diff_fdr\toverlap\tannotation") {input.integrated} >  {output.integrated}
         """
 
-
-
-
-
-
+rule danpos_vis_over_annotations:
+    input:
+        individual = "nucleosome_calling/regions/{figure}/{condition}-v-{control}/{figure}-allannotations-individual.tsv",
+        integrated = "nucleosome_calling/regions/{figure}/{condition}-v-{control}/{figure}-allannotations-integrated.tsv",
+        annotations = lambda wc: [v["path"] for k,v in QUANT[wc.figure]["annotations"].items()]
+    output:
+        indiv_occ_hmap = "nucleosome_calling/regions/{figure}/{condition}-v-{control}/{figure}-{condition}-v-{control}-individual-occupancy-heatmaps.svg",
+        indiv_fuzz_hmap = "nucleosome_calling/regions/{figure}/{condition}-v-{control}/{figure}-{condition}-v-{control}-individual-fuzziness-heatmaps.svg",
+        indiv_occ_meta = "nucleosome_calling/regions/{figure}/{condition}-v-{control}/{figure}-{condition}-v-{control}-individual-occupancy-metagene.svg",
+        indiv_fuzz_meta = "nucleosome_calling/regions/{figure}/{condition}-v-{control}/{figure}-{condition}-v-{control}-individual-fuzziness-metagene.svg",
+        integrated_occ_summit_hmap = "nucleosome_calling/regions/{figure}/{condition}-v-{control}/{figure}-{condition}-v-{control}-integrated-summit-occupancy-heatmap.svg",
+        integrated_occ_point_hmap = "nucleosome_calling/regions/{figure}/{condition}-v-{control}/{figure}-{condition}-v-{control}-integrated-point-occupancy-heatmap.svg",
+        integrated_fuzz_hmap = "nucleosome_calling/regions/{figure}/{condition}-v-{control}/{figure}-{condition}-v-{control}-integrated-fuzziness-heatmap.svg",
+        integrated_displacement_hmap = "nucleosome_calling/regions/{figure}/{condition}-v-{control}/{figure}-{condition}-v-{control}-integrated-displacement-heatmap.svg",
+        integrated_displacement_segment_hmap = "nucleosome_calling/regions/{figure}/{condition}-v-{control}/{figure}-{condition}-v-{control}-integrated-displacement-segment-heatmap.svg",
+        integrated_occ_summit_meta = "nucleosome_calling/regions/{figure}/{condition}-v-{control}/{figure}-{condition}-v-{control}-integrated-summit-occupancy-metagene.svg",
+        integrated_occ_point_meta = "nucleosome_calling/regions/{figure}/{condition}-v-{control}/{figure}-{condition}-v-{control}-integrated-point-occupancy-metagene.svg",
+        integrated_fuzz_meta = "nucleosome_calling/regions/{figure}/{condition}-v-{control}/{figure}-{condition}-v-{control}-integrated-fuzziness-metagene.svg",
+        integrated_displacement_meta = "nucleosome_calling/regions/{figure}/{condition}-v-{control}/{figure}-{condition}-v-{control}-integrated-displacement-metagene.svg",
+    params:
+        anno_labels = lambda wc: [v["label"] for k,v in QUANT[wc.figure]["annotations"].items()],
+        refptlabel = lambda wc: QUANT[wc.figure]["refpointlabel"],
+        sortmethod = lambda wc: QUANT[wc.figure]["arrange"],
+        binsize = lambda wc: QUANT[wc.figure]["binsize"],
+        occupancy_cutoffs = lambda wc: [QUANT[wc.figure]["occupancy_cutoff_low"], QUANT[wc.figure]["occupancy_cutoff_high"]],
+        fuzziness_cutoffs = lambda wc: [QUANT[wc.figure]["fuzziness_cutoff_low"], QUANT[wc.figure]["fuzziness_cutoff_high"]],
+        occupancy_lfc_limit = lambda wc: QUANT[wc.figure]["occupancy_lfc_limit"],
+        fuzziness_lfc_limit = lambda wc: QUANT[wc.figure]["fuzziness_lfc_limit"],
+        displacement_limit = lambda wc: QUANT[wc.figure]["displacement_limit"],
+        max_length = lambda wc: QUANT[wc.figure]["max_length"],
+        trim_pct = lambda wc: QUANT[wc.figure]["trim_pct"],
+    script:
+        "scripts/mnase_quant_vis.R"
 
