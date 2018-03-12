@@ -121,3 +121,7 @@ danpos:
 plot_danpos_results:
     time: 10
     mem: 10000
+
+danpos_vis_over_annotations:
+    time: 10
+    mem: 10000
