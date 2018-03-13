@@ -103,7 +103,7 @@ main = function(individual_path, integrated_path, anno_paths, anno_labels, sortm
         theme(text = element_text(size=16, color="black", face="bold"),
               strip.background = element_blank(),
               strip.text = element_text(size=16, color="black", face="bold"),
-              strip.text.y = if(n_anno==1){element_text(angle=-90)} else{element_text(angle=-180, hjust=1)},
+              strip.text.y = if(n_anno==1){element_text(angle=-90)} else{element_text(angle=0, hjust=1, vjust=0.5)},
               axis.text.x = element_text(size=16, color="black", face="bold"),
               axis.text.y = element_blank(),
               axis.title.x = element_text(size=12, face="plain"),
@@ -282,8 +282,8 @@ main = function(individual_path, integrated_path, anno_paths, anno_labels, sortm
         ggp +
             geom_hline(yintercept = 0, size=1, color="gray65") +
             geom_vline(xintercept = 0, size=1, color="grey65") +
-            geom_ribbon(size=0, alpha=0.4) +
-            geom_line() +
+            geom_ribbon(size=0, alpha=ifelse(n_anno<=3,0.4,0.1)) +
+            geom_line(alpha=ifelse(n_anno<=3, 1, 0.5)) +
             xscale +
             scale_color_ptol() +
             scale_fill_ptol() +
@@ -337,19 +337,19 @@ main = function(individual_path, integrated_path, anno_paths, anno_labels, sortm
                 subtitle = if(n_anno==1){levels(individual_meta[["annotation"]])[1]}else{NULL}) +
         theme_integrated_meta
     
-    ggsave(indiv_occ_hmap_out, plot=indiv_occ_hmap, width=20, height=30, units="cm", dpi=326)
-    ggsave(indiv_fuzz_hmap_out, plot=indiv_fuzz_hmap, width=20, height=30, units="cm")
-    ggsave(indiv_occ_meta_out, plot=indiv_occ_meta, width=ifelse(n_anno==1,16,20), height=2+8*n_anno, units="cm")
-    ggsave(indiv_fuzz_meta_out, plot=indiv_fuzz_meta, width=ifelse(n_anno==1,16,20), height=2+8*n_anno, units="cm")
-    ggsave(integrated_occ_summit_hmap_out, plot=integrated_occ_summit_hmap, width=16, height=30, units="cm")
-    ggsave(integrated_occ_point_hmap_out, plot=integrated_occ_point_hmap, width=16, height=30, units="cm")
-    ggsave(integrated_fuzz_hmap_out, plot=integrated_fuzz_hmap, width=16, height=30, units="cm")
-    ggsave(integrated_displacement_hmap_out, plot=integrated_displacement_hmap, width=16, height=30, units="cm")
-    ggsave(integrated_displacement_segment_hmap_out, plot=integrated_displacement_segment_hmap, width=16, height=30, units="cm")
-    ggsave(integrated_occ_summit_meta_out, plot=integrated_occ_summit_meta, width=ifelse(n_anno==1,16,20), height=10, units="cm")
-    ggsave(integrated_occ_point_meta_out, plot=integrated_occ_point_meta, width=ifelse(n_anno==1,16,20), height=10, units="cm")
-    ggsave(integrated_fuzz_meta_out, plot=integrated_fuzz_meta, width=ifelse(n_anno==1,16,20), height=10, units="cm")
-    ggsave(integrated_displacement_meta_out, plot=integrated_displacement_meta, width=ifelse(n_anno==1,16,20), height=10, units="cm")
+    ggsave(indiv_occ_hmap_out, plot=indiv_occ_hmap, width=ifelse(n_anno==1,20,25), height=30, units="cm")
+    ggsave(indiv_fuzz_hmap_out, plot=indiv_fuzz_hmap, width=ifelse(n_anno==1,20,25), height=30, units="cm")
+    ggsave(indiv_occ_meta_out, plot=indiv_occ_meta, width=ifelse(n_anno==1,16,22), height=2+8*n_anno, units="cm")
+    ggsave(indiv_fuzz_meta_out, plot=indiv_fuzz_meta, width=ifelse(n_anno==1,16,22), height=2+8*n_anno, units="cm")
+    ggsave(integrated_occ_summit_hmap_out, plot=integrated_occ_summit_hmap, width=ifelse(n_anno==1,16,22), height=30, units="cm")
+    ggsave(integrated_occ_point_hmap_out, plot=integrated_occ_point_hmap, width=ifelse(n_anno==1,16,22), height=30, units="cm")
+    ggsave(integrated_fuzz_hmap_out, plot=integrated_fuzz_hmap, width=ifelse(n_anno==1,16,22), height=30, units="cm")
+    ggsave(integrated_displacement_hmap_out, plot=integrated_displacement_hmap, width=ifelse(n_anno==1,16,22), height=30, units="cm")
+    ggsave(integrated_displacement_segment_hmap_out, plot=integrated_displacement_segment_hmap, width=ifelse(n_anno==1,16,22), height=30, units="cm")
+    ggsave(integrated_occ_summit_meta_out, plot=integrated_occ_summit_meta, width=ifelse(n_anno==1,16,22), height=10, units="cm")
+    ggsave(integrated_occ_point_meta_out, plot=integrated_occ_point_meta, width=ifelse(n_anno==1,16,22), height=10, units="cm")
+    ggsave(integrated_fuzz_meta_out, plot=integrated_fuzz_meta, width=ifelse(n_anno==1,16,22), height=10, units="cm")
+    ggsave(integrated_displacement_meta_out, plot=integrated_displacement_meta, width=ifelse(n_anno==1,16,22), height=10, units="cm")
 
 }
 
