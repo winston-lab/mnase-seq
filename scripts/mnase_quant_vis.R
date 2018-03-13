@@ -103,7 +103,7 @@ main = function(individual_path, integrated_path, anno_paths, anno_labels, sortm
         theme(text = element_text(size=16, color="black", face="bold"),
               strip.background = element_blank(),
               strip.text = element_text(size=16, color="black", face="bold"),
-              strip.text.y = if(n_anno==1){element_text(angle=-90)} else{element_text(angle=0, hjust=1, vjust=0.5)},
+              strip.text.y = if(n_anno==1){element_text(angle=-90)} else{element_text(angle=-180, hjust=1, vjust=0.5)},
               axis.text.x = element_text(size=16, color="black", face="bold"),
               axis.text.y = element_blank(),
               axis.title.x = element_text(size=12, face="plain"),
@@ -123,7 +123,7 @@ main = function(individual_path, integrated_path, anno_paths, anno_labels, sortm
     
     indiv_occ_hmap = ggplot(data = individual,
            aes(x=nuc_summit, y=as.integer(feat_name), fill=occupancy)) +
-        geom_tile(width=100, height=1, na.rm=TRUE) +
+        geom_tile(width=100, height=1, size=0, na.rm=TRUE) +
         xscale +
         scale_y_reverse(expand=c(0,0)) +
         scale_fill_viridis(option="inferno", oob=scales::squish, 
@@ -159,7 +159,7 @@ main = function(individual_path, integrated_path, anno_paths, anno_labels, sortm
               strip.placement = "outside",
               strip.background = element_blank(),
               strip.text = element_text(size=12, color="black", face="bold"),
-              strip.text.y = if(n_anno==1){element_blank()}else{element_text(angle=-0, vjust=0)},
+              strip.text.y = if(n_anno==1){element_blank()}else{element_text(angle=0, hjust=0, vjust=0.5)},
               plot.title = element_text(size=12),
               plot.subtitle = element_text(size=12, face="plain"))
     
@@ -203,7 +203,7 @@ main = function(individual_path, integrated_path, anno_paths, anno_labels, sortm
               axis.title.y = element_blank(),
               strip.background = element_blank(),
               strip.text = element_text(size=16, color="black"),
-              strip.text.y = if(n_anno==1){element_text(angle=-90)} else{element_text(angle=-180, hjust=1)},
+              strip.text.y = if(n_anno==1){element_text(angle=-90)} else{element_text(angle=0, hjust=0)},
               strip.placement="outside",
               panel.border = element_blank(),
               panel.grid.major.x = element_line(color="grey65", size=1),
@@ -325,8 +325,8 @@ main = function(individual_path, integrated_path, anno_paths, anno_labels, sortm
                                               color=annotation, fill=annotation)) +
         geom_hline(yintercept = 0, size=1, color="gray65") +
         geom_vline(xintercept = 0, size=1, color="grey65") +
-        geom_ribbon(size=0, alpha=0.4) +
-        geom_line() +
+        geom_ribbon(size=0, alpha=ifelse(n_anno<=3,0.4,0.1)) +
+        geom_line(alpha=ifelse(n_anno<=3, 1, 0.5)) +
         xscale +
         scale_color_ptol() +
         scale_fill_ptol() +
