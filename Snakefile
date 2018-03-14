@@ -655,6 +655,7 @@ rule danpos_vis_over_annotations:
         occupancy_lfc_limit = lambda wc: QUANT[wc.figure]["occupancy_lfc_limit"],
         fuzziness_lfc_limit = lambda wc: QUANT[wc.figure]["fuzziness_lfc_limit"],
         displacement_limit = lambda wc: QUANT[wc.figure]["displacement_limit"],
+        upstream = lambda wc: QUANT[wc.figure]["upstream"],
         max_length = lambda wc: QUANT[wc.figure]["max_length"],
         trim_pct = lambda wc: QUANT[wc.figure]["trim_pct"],
     script:

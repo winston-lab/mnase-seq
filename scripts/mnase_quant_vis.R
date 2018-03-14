@@ -5,7 +5,7 @@ library(psych)
 library(ggthemes)
 library(pals)
 
-main = function(individual_path, integrated_path, anno_paths, anno_labels, sortmethod, refptlabel, condition, control,
+main = function(individual_path, integrated_path, anno_paths, anno_labels, sortmethod, refptlabel, condition, control, upstream,
                 max_length, trim_pct, binsize, occupancy_cutoffs, fuzziness_cutoffs, occupancy_lfc_limit, fuzziness_lfc_limit, displacement_limit,
                 indiv_occ_hmap_out, indiv_fuzz_hmap_out, indiv_occ_meta_out, indiv_fuzz_meta_out,
                 integrated_occ_summit_hmap_out, integrated_occ_point_hmap_out, integrated_fuzz_hmap_out, integrated_displacement_hmap_out, integrated_displacement_segment_hmap_out,
@@ -34,8 +34,8 @@ main = function(individual_path, integrated_path, anno_paths, anno_labels, sortm
                   funs(fct_inorder(., ordered=TRUE)))
     if (sortmethod=="length"){
         individual = individual %>% 
-            group_by(feat_name) %>%
-            arrange(feat_end-feat_start) %>% 
+            group_by(annotation, feat_name) %>%
+            arrange(annotation, feat_end-feat_start) %>% 
             ungroup() %>% 
             mutate(feat_name = fct_inorder(feat_name, ordered=TRUE))
     } else {
@@ -44,15 +44,16 @@ main = function(individual_path, integrated_path, anno_paths, anno_labels, sortm
     }
     
     individual_meta = individual %>% 
-        mutate(position = cut(nuc_summit, breaks=seq(min(nuc_summit), max(nuc_summit), by=binsize),
-                              labels=seq(min(nuc_summit)+binsize/2, max(nuc_summit)-binsize/2, by=binsize)) %>%
+        mutate(position = cut(nuc_summit, breaks=seq(min(nuc_summit, na.rm=TRUE), max(nuc_summit, na.rm=TRUE), by=binsize),
+                              labels=seq(min(nuc_summit, na.rm=TRUE)+binsize/2, max(nuc_summit, na.rm=TRUE)-binsize/2, by=binsize)) %>%
                    as.character() %>% as.integer()) %>% 
-        filter(position <= max_length) %>%  
+        filter(between(position, -upstream, max_length)) %>% 
         group_by(group, position, annotation) %>% 
         summarise(occupancy_mean = winsor.mean(occupancy, trim=trim_pct),
                   occupancy_sem = winsor.sd(occupancy, trim=trim_pct)/sqrt(n()),
                   fuzziness_mean = winsor.mean(fuzziness, trim=trim_pct),
-                  fuzziness_sem = winsor.sd(fuzziness, trim=trim_pct)/sqrt(n()))
+                  fuzziness_sem = winsor.sd(fuzziness, trim=trim_pct)/sqrt(n())) %>% 
+        drop_na()
     
     #####
     # import data for DANPOS2 integrated analysis
@@ -74,7 +75,7 @@ main = function(individual_path, integrated_path, anno_paths, anno_labels, sortm
     if (sortmethod=="length") {
         integrated = integrated %>% 
             group_by(feat_name) %>% 
-            arrange(feat_end-feat_start) %>% 
+            arrange(annotation, feat_end-feat_start) %>% 
             ungroup() %>% 
             mutate(feat_name = fct_inorder(feat_name, ordered=TRUE))
     } else {
@@ -83,10 +84,10 @@ main = function(individual_path, integrated_path, anno_paths, anno_labels, sortm
     }
     
     integrated_meta = integrated %>% 
-        mutate(position = cut(nuc_center, breaks=seq(min(nuc_center), max(nuc_center), by=binsize),
-                              labels=seq(min(nuc_center)+binsize/2, max(nuc_center)-binsize/2, by=binsize)) %>% 
+        mutate(position = cut(nuc_center, breaks=seq(min(nuc_center, na.rm=TRUE), max(nuc_center, na.rm=TRUE), by=binsize),
+                              labels=seq(min(nuc_center, na.rm=TRUE)+binsize/2, max(nuc_center, na.rm=TRUE)-binsize/2, by=binsize)) %>% 
                    as.character() %>% as.integer()) %>% 
-        filter(position <= max_length) %>% 
+        filter(between(position, -upstream, max_length)) %>% 
         group_by(annotation, position) %>% 
         summarise(summit_lfc_mean = winsor.mean(summit_lfc, trim=trim_pct),
                   summit_lfc_sem = winsor.sd(summit_lfc, trim=trim_pct)/sqrt(n()),
@@ -95,7 +96,8 @@ main = function(individual_path, integrated_path, anno_paths, anno_labels, sortm
                   fuzziness_lfc_mean = winsor.mean(fuzziness_lfc, trim=trim_pct),
                   fuzziness_lfc_sem = winsor.sd(fuzziness_lfc, trim=trim_pct)/sqrt(n()),
                   cond_ctrl_dist_mean = winsor.mean(cond_ctrl_dist, trim=trim_pct),
-                  cond_ctrl_dist_sem = winsor.sd(cond_ctrl_dist, trim=trim_pct)/sqrt(n()))
+                  cond_ctrl_dist_sem = winsor.sd(cond_ctrl_dist, trim=trim_pct)/sqrt(n())) %>% 
+        drop_na()
     
     #####
     # individual plots
@@ -114,9 +116,10 @@ main = function(individual_path, integrated_path, anno_paths, anno_labels, sortm
               legend.text = element_text(size=12, face="plain"),
               legend.margin = margin(0,0,0,0),
               legend.box.margin = margin(0,0,0,0),
-              panel.spacing.x = unit(0.5, "cm"))
+              panel.spacing.x = unit(1, "cm"),
+              plot.margin = margin(5.5, 16, 5.5, 5.5, "pt"))
     
-    xscale = scale_x_continuous(limits = c(NA, max_length),
+    xscale = scale_x_continuous(limits = c(-upstream, max_length),
                                 expand = c(0,0),
                                 name=paste("distance from", refptlabel, ifelse(max_length>500,"(kb)","(nt)")),
                                 labels = function(x)ifelse(x==0, refptlabel, if(max_length>500){x/1000}else{x}))
@@ -132,7 +135,7 @@ main = function(individual_path, integrated_path, anno_paths, anno_labels, sortm
                            name = "nucleosome occupancy",
                            guide=guide_colorbar(title.position="top", title.hjust=0.5,
                                                 barwidth=16, barheight=1)) +
-        facet_grid(annotation~group, switch="y") +
+        facet_grid(annotation~group, switch="y", scales="free_y", space="free_y") +
         theme_indiv_heatmap
     
     indiv_fuzz_hmap = ggplot(data = individual,
@@ -145,7 +148,7 @@ main = function(individual_path, integrated_path, anno_paths, anno_labels, sortm
                            name = "nucleosome fuzziness (bp)",
                            guide=guide_colorbar(title.position="top", title.hjust=0.5,
                                                 barwidth=16, barheight=1)) +
-        facet_grid(annotation~group, switch="y") +
+        facet_grid(annotation~group, switch="y", scales="free_y", space="free_y") +
         theme_indiv_heatmap
     
     theme_indiv_meta = theme_light() +
@@ -226,7 +229,7 @@ main = function(individual_path, integrated_path, anno_paths, anno_labels, sortm
                                  name=bquote(log[2] ~ frac(.(condition), .(control))),
                                  guide=guide_colorbar(title.position="left", title.vjust=1,
                                                       barwidth=16, barheight=1)) +
-            facet_grid(annotation~., switch=if(n_anno==1){"y"}else{NULL}) +
+            facet_grid(annotation~., switch=if(n_anno==1){"y"}else{NULL}, scales="free_y", space="free_y") +
             theme_integrated_heatmap
     }
     
@@ -254,7 +257,7 @@ main = function(individual_path, integrated_path, anno_paths, anno_labels, sortm
                              name="nucleosome displacement (bp)",
                              guide=guide_colorbar(title.position="top", title.hjust=0.5,
                                                   barwidth=16, barheight=1)) +
-        facet_grid(annotation~., switch=if(n_anno==1){"y"}else{NULL}) +
+        facet_grid(annotation~., switch=if(n_anno==1){"y"}else{NULL}, scales="free_y", space="free_y") +
         theme_integrated_heatmap +
         theme(legend.title = element_text(size=16, face="bold"),
               legend.text = element_text(size=12, face="bold"))
@@ -268,7 +271,7 @@ main = function(individual_path, integrated_path, anno_paths, anno_labels, sortm
         scale_color_ptol(name="direction of nucleosome displacement:",
                          guide=guide_legend(title.position="top", label.position="top",
                                             label.hjust=0.5, keywidth=unit(2, "cm"))) +
-        facet_grid(annotation~., switch=if(n_anno==1){"y"}else{NULL}) +
+        facet_grid(annotation~., switch=if(n_anno==1){"y"}else{NULL}, scales="free_y", space="free_y") +
         theme_integrated_heatmap +
         theme(legend.title = element_text(size=16, face="bold"),
               legend.text = element_text(size=12, face="bold"))
@@ -367,6 +370,7 @@ main(sortmethod= snakemake@params[["sortmethod"]],
      fuzziness_lfc_limit = snakemake@params[["fuzziness_lfc_limit"]],
      displacement_limit = snakemake@params[["displacement_limit"]],
      occupancy_lfc_limit = snakemake@params[["occupancy_lfc_limit"]],
+     upstream = snakemake@params[["upstream"]],
      max_length = snakemake@params[["max_length"]],
      trim_pct = snakemake@params[["trim_pct"]],
      indiv_occ_hmap_out = snakemake@output[["indiv_occ_hmap"]],
@@ -381,5 +385,4 @@ main(sortmethod= snakemake@params[["sortmethod"]],
      integrated_occ_summit_meta_out = snakemake@output[["integrated_occ_summit_meta"]],
      integrated_occ_point_meta_out = snakemake@output[["integrated_occ_point_meta"]],
      integrated_fuzz_meta_out = snakemake@output[["integrated_fuzz_meta"]],
-     integrated_displacement_meta_out = snakemake@output[["integrated_displacement_meta"]]
-)
+     integrated_displacement_meta_out = snakemake@output[["integrated_displacement_meta"]])
