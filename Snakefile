@@ -60,7 +60,7 @@ rule all:
         #danpos over annotations
         expand(expand("nucleosome_calling/regions/{{figure}}/{condition}-v-{control}/{{figure}}-{condition}-v-{control}-individual-occupancy-heatmaps.svg", zip, condition=conditiongroups, control=controlgroups), figure=QUANT),
         #differential nucleosome levels over transcripts
-        expand("diff_levels/{condition}-v-{control}/{condition}-v-{control}-results-libsizenorm-all.tsv", zip, condition=conditiongroups, control=controlgroups) + expand("diff_levels/{condition}-v-{control}/{condition}-v-{control}-results-spikenorm-all.tsv", zip, condition=conditiongroups_si, control=controlgroups_si) if sisamples else expand("diff_levels/{condition}-v-{control}/{condition}-v-{control}-results-libsizenorm-all.tsv", zip, condition=conditiongroups, control=controlgroups)
+        expand("diff_levels/{condition}-v-{control}/libsizenorm/{condition}-v-{control}-results-libsizenorm-all.tsv", zip, condition=conditiongroups, control=controlgroups) + expand("diff_levels/{condition}-v-{control}/spikenorm/{condition}-v-{control}-results-spikenorm-all.tsv", zip, condition=conditiongroups_si, control=controlgroups_si) if sisamples else expand("diff_levels/{condition}-v-{control}/libsizenorm/{condition}-v-{control}-results-libsizenorm-all.tsv", zip, condition=conditiongroups, control=controlgroups)
 
 def plotcorrsamples(wc):
     dd = SAMPLES if wc.status=="all" else PASSING
@@ -702,17 +702,17 @@ rule call_nuclevel_changes:
         alpha = config["deseq"]["fdr"],
         lfc = log2(config["deseq"]["fold-change-threshold"])
     output:
-        results_all = "diff_levels/{condition}-v-{control}/{condition}-v-{control}-results-{norm}-all.tsv",
-        results_up = "diff_levels/{condition}-v-{control}/{condition}-v-{control}-results-{norm}-up.tsv",
-        results_down = "diff_levels/{condition}-v-{control}/{condition}-v-{control}-results-{norm}-down.tsv",
-        results_unch = "diff_levels/{condition}-v-{control}/{condition}-v-{control}-results-{norm}-unch.tsv",
-        bed_all = "diff_levels/{condition}-v-{control}/{condition}-v-{control}-results-{norm}-all.bed",
-        bed_up = "diff_levels/{condition}-v-{control}/{condition}-v-{control}-results-{norm}-up.bed",
-        bed_down = "diff_levels/{condition}-v-{control}/{condition}-v-{control}-results-{norm}-down.bed",
-        bed_unch = "diff_levels/{condition}-v-{control}/{condition}-v-{control}-results-{norm}-unch.bed",
-        normcounts = "diff_levels/{condition}-v-{control}/{condition}-v-{control}-counts-sfnorm-{norm}.tsv",
-        rldcounts = "diff_levels/{condition}-v-{control}/{condition}-v-{control}-counts-rlog-{norm}.tsv",
-        qcplots = "diff_levels/{condition}-v-{control}/{condition}-v-{control}-qcplots-{norm}.svg"
+        results_all = "diff_levels/{condition}-v-{control}/{norm}/{condition}-v-{control}-results-{norm}-all.tsv",
+        results_up = "diff_levels/{condition}-v-{control}/{norm}/{condition}-v-{control}-results-{norm}-up.tsv",
+        results_down = "diff_levels/{condition}-v-{control}/{norm}/{condition}-v-{control}-results-{norm}-down.tsv",
+        results_unch = "diff_levels/{condition}-v-{control}/{norm}/{condition}-v-{control}-results-{norm}-unch.tsv",
+        bed_all = "diff_levels/{condition}-v-{control}/{norm}/{condition}-v-{control}-results-{norm}-all.bed",
+        bed_up = "diff_levels/{condition}-v-{control}/{norm}/{condition}-v-{control}-results-{norm}-up.bed",
+        bed_down = "diff_levels/{condition}-v-{control}/{norm}/{condition}-v-{control}-results-{norm}-down.bed",
+        bed_unch = "diff_levels/{condition}-v-{control}/{norm}/{condition}-v-{control}-results-{norm}-unch.bed",
+        normcounts = "diff_levels/{condition}-v-{control}/{norm}/{condition}-v-{control}-counts-sfnorm-{norm}.tsv",
+        rldcounts = "diff_levels/{condition}-v-{control}/{norm}/{condition}-v-{control}-counts-rlog-{norm}.tsv",
+        qcplots = "diff_levels/{condition}-v-{control}/{norm}/{condition}-v-{control}-qcplots-{norm}.svg"
     script:
         "scripts/call_de_transcripts.R"
 
