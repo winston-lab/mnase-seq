@@ -673,7 +673,7 @@ rule map_counts_to_transcripts:
         temp("diff_levels/{condition}-v-{control}/{sample}-{type}-alltranscriptcounts.tsv")
     log: "logs/map_counts_to_transcripts/map_counts_to_transcripts-{condition}-v-{control}-{sample}-{type}.log"
     shell: """
-        (LC_COLLATE=C sort -k1,1 -k2,2n {input.bed} | bedtools map -a stdin -b {input.bg} -c 4 -o sum | awk 'BEGIN{{FS=OFS="\t"}}{{print $4"~"$1"~"$2"~"$3, $7}}' &> {output}) &> {log}
+        (LC_COLLATE=C sort -k1,1 -k2,2n {input.bed} | bedtools map -a stdin -b {input.bg} -c 4 -o sum | awk 'BEGIN{{FS=OFS="\t"}}{{($6=="+") ? strand="plus" : strand="minus"; print $4"~"$1"-"strand"~"$2"~"$3, $7}}' &> {output}) &> {log}
         """
 
 def getsamples(ctrl, cond):
