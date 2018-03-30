@@ -336,7 +336,7 @@ main = function(individual_path, integrated_path, anno_paths, anno_labels, sortm
         scale_y_continuous(breaks = scales::pretty_breaks(n=8),
                            labels = function(x){if_else(x<=0, as.character(x), paste0("+",x))},
                            name="displacement (bp)") +
-        ggtitle(label="mean nucleosome displacment",
+        ggtitle(label="mean nucleosome displacement",
                 subtitle = if(n_anno==1){levels(individual_meta[["annotation"]])[1]}else{NULL}) +
         theme_integrated_meta
     

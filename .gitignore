@@ -6,6 +6,7 @@ logs/cluster/*
 alignment/
 coverage/
 nucleosome_calling/
+diff_levels/
 qual_ctrl/
 datavis/
 scripts/.snakemake*

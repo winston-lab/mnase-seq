@@ -125,3 +125,7 @@ plot_danpos_results:
 danpos_vis_over_annotations:
     time: 10
     mem: 10000
+
+call_de_transcripts:
+    time: 10
+    mem: 10000

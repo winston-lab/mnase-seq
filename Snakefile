@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from math import log2
 import itertools
 
 configfile: "config.yaml"
@@ -28,7 +29,8 @@ localrules: all,
             cat_matrices,
             group_bam_for_danpos,
             danpos_over_annotations,
-            cat_danpos_annotations
+            cat_danpos_annotations,
+            map_counts_to_transcripts, get_transcript_counts,
 
 rule all:
     input:
@@ -56,7 +58,9 @@ rule all:
         expand("nucleosome_calling/{condition}-v-{control}/reference_positions.xls", zip, condition=conditiongroups, control=controlgroups),
         expand("nucleosome_calling/{condition}-v-{control}/{condition}-v-{control}_dyad-shift-histogram.svg", zip, condition=conditiongroups, control=controlgroups),
         #danpos over annotations
-        expand(expand("nucleosome_calling/regions/{{figure}}/{condition}-v-{control}/{{figure}}-{condition}-v-{control}-individual-occupancy-heatmaps.svg", zip, condition=conditiongroups, control=controlgroups), figure=QUANT)
+        expand(expand("nucleosome_calling/regions/{{figure}}/{condition}-v-{control}/{{figure}}-{condition}-v-{control}-individual-occupancy-heatmaps.svg", zip, condition=conditiongroups, control=controlgroups), figure=QUANT),
+        #differential nucleosome levels over transcripts
+        expand("diff_levels/{condition}-v-{control}/{condition}-v-{control}-results-libsizenorm-all.tsv", zip, condition=conditiongroups, control=controlgroups) + expand("diff_levels/{condition}-v-{control}/{condition}-v-{control}-results-spikenorm-all.tsv", zip, condition=conditiongroups_si, control=controlgroups_si) if sisamples else expand("diff_levels/{condition}-v-{control}/{condition}-v-{control}-results-libsizenorm-all.tsv", zip, condition=conditiongroups, control=controlgroups)
 
 def plotcorrsamples(wc):
     dd = SAMPLES if wc.status=="all" else PASSING
@@ -660,4 +664,55 @@ rule danpos_vis_over_annotations:
         trim_pct = lambda wc: QUANT[wc.figure]["trim_pct"],
     script:
         "scripts/mnase_quant_vis.R"
+
+rule map_counts_to_transcripts:
+    input:
+        bed = lambda wc: config["genome"]["transcripts"] if wc.type=="exp" else config["genome"]["spikein-transcripts"],
+        bg = lambda wc: "coverage/counts/" + wc.sample + "-mnase-midpoint-counts.bedgraph" if wc.type=="exp" else "coverage/sicounts/" + wc.sample + "-mnase-midpoint-sicounts.bedgraph"
+    output:
+        temp("diff_levels/{condition}-v-{control}/{sample}-{type}-alltranscriptcounts.tsv")
+    log: "logs/map_counts_to_transcripts/map_counts_to_transcripts-{condition}-v-{control}-{sample}-{type}.log"
+    shell: """
+        (LC_COLLATE=C sort -k1,1 -k2,2n {input.bed} | bedtools map -a stdin -b {input.bg} -c 4 -o sum | awk 'BEGIN{{FS=OFS="\t"}}{{print $4"~"$1"~"$2"~"$3, $7}}' &> {output}) &> {log}
+        """
+
+def getsamples(ctrl, cond):
+    return [k for k,v in PASSING.items() if (v["group"]==ctrl or v["group"]==cond)]
+
+rule get_transcript_counts:
+    input:
+        lambda wc : ["diff_levels/" + wc.condition + "-v-" + wc.control + "/" + x + "-" + wc.type + "-alltranscriptcounts.tsv" for x in getsamples(wc.control, wc.condition)]
+    output:
+        "diff_levels/{condition}-v-{control}/{condition}-v-{control}-{type}-transcript-counts.tsv"
+    params:
+        n = lambda wc: 2*len(getsamples(wc.control, wc.condition)),
+        names = lambda wc: "\t".join(getsamples(wc.control, wc.condition))
+    log: "logs/get_transcript_counts/get_transcript_counts-{condition}-v-{control}-{type}.log"
+    shell: """
+        (paste {input} | cut -f$(paste -d, <(echo "1") <(seq -s, 2 2 {params.n})) | cat <(echo -e "name\t" "{params.names}" ) - > {output}) &> {log}
+        """
+
+rule call_nuclevel_changes:
+    input:
+        expcounts = "diff_levels/{condition}-v-{control}/{condition}-v-{control}-exp-transcript-counts.tsv",
+        sicounts = lambda wc: "diff_levels/" + wc.condition + "-v-" + wc.control + "/" + wc.condition + "-v-" + wc.control + "-si-transcript-counts.tsv" if wc.norm=="spikenorm" else "diff_levels/" + wc.condition + "-v-" + wc.control + "/" + wc.condition + "-v-" + wc.control + "-exp-transcript-counts.tsv"
+    params:
+        samples = lambda wc : getsamples(wc.control, wc.condition),
+        groups = lambda wc : [PASSING[x]["group"] for x in getsamples(wc.control, wc.condition)],
+        alpha = config["deseq"]["fdr"],
+        lfc = log2(config["deseq"]["fold-change-threshold"])
+    output:
+        results_all = "diff_levels/{condition}-v-{control}/{condition}-v-{control}-results-{norm}-all.tsv",
+        results_up = "diff_levels/{condition}-v-{control}/{condition}-v-{control}-results-{norm}-up.tsv",
+        results_down = "diff_levels/{condition}-v-{control}/{condition}-v-{control}-results-{norm}-down.tsv",
+        results_unch = "diff_levels/{condition}-v-{control}/{condition}-v-{control}-results-{norm}-unch.tsv",
+        bed_all = "diff_levels/{condition}-v-{control}/{condition}-v-{control}-results-{norm}-all.bed",
+        bed_up = "diff_levels/{condition}-v-{control}/{condition}-v-{control}-results-{norm}-up.bed",
+        bed_down = "diff_levels/{condition}-v-{control}/{condition}-v-{control}-results-{norm}-down.bed",
+        bed_unch = "diff_levels/{condition}-v-{control}/{condition}-v-{control}-results-{norm}-unch.bed",
+        normcounts = "diff_levels/{condition}-v-{control}/{condition}-v-{control}-counts-sfnorm-{norm}.tsv",
+        rldcounts = "diff_levels/{condition}-v-{control}/{condition}-v-{control}-counts-rlog-{norm}.tsv",
+        qcplots = "diff_levels/{condition}-v-{control}/{condition}-v-{control}-qcplots-{norm}.svg"
+    script:
+        "scripts/call_de_transcripts.R"
 
