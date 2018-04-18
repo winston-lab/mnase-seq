@@ -32,6 +32,9 @@ localrules: all,
             cat_danpos_annotations,
             map_counts_to_transcripts, get_transcript_counts,
 
+onsuccess:
+    shell("(./mogrify.sh) > mogrify.log")
+
 rule all:
     input:
         #fastqc
