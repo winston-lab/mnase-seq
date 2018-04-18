@@ -262,8 +262,8 @@ main = function(individual_path, integrated_path, anno_paths, anno_labels, sortm
         theme(legend.title = element_text(size=16, face="bold"),
               legend.text = element_text(size=12, face="bold"))
     
-    integrated_displacement_segment_hmap = ggplot(data = integrated, aes(x=nuc_center, y=as.integer(feat_name),
-                                  xend=nuc_center+cond_ctrl_dist, yend=as.integer(feat_name),
+    integrated_displacement_segment_hmap = ggplot(data = integrated, aes(x=ctrl_summit_loc, y=as.integer(feat_name),
+                                  xend=cond_summit_loc, yend=as.integer(feat_name),
                                   color=direction)) +
         geom_segment(na.rm=TRUE) +
         scale_y_reverse(expand=c(0,0)) +
