@@ -5,7 +5,7 @@ library(psych)
 library(ggthemes)
 library(pals)
 
-main = function(individual_path, integrated_path, anno_paths, anno_labels, sortmethod, refptlabel, condition, control, upstream,
+main = function(individual_path, integrated_path, anno_paths, anno_labels, sortmethod, refpt, refptlabel, condition, control, upstream,
                 max_length, trim_pct, binsize, occupancy_cutoffs, fuzziness_cutoffs, occupancy_lfc_limit, fuzziness_lfc_limit, displacement_limit,
                 indiv_occ_hmap_out, indiv_fuzz_hmap_out, indiv_occ_meta_out, indiv_fuzz_meta_out,
                 integrated_occ_summit_hmap_out, integrated_occ_point_hmap_out, integrated_fuzz_hmap_out, integrated_displacement_hmap_out, integrated_displacement_segment_hmap_out,
@@ -24,7 +24,13 @@ main = function(individual_path, integrated_path, anno_paths, anno_labels, sortm
     individual = read_tsv(individual_path) %>% 
         left_join(annotation, by=c("chrom", "feat_name", "feat_strand", "annotation")) %>% 
         mutate(feat_start=start, feat_end=end) %>% 
-        select(-c(start, end)) %>% 
+        select(-c(start, end))
+    if(refpt=="center"){
+        individual = individual %>%
+            mutate(start = as.integer((start+end)/2),
+                   end = as.integer(start+1))
+    }
+    individual = individual %>%
         mutate_at(vars(nuc_start, nuc_end, nuc_summit),
                   funs(if_else(feat_strand=="+", .-feat_start, feat_end-.))) %>% 
         group_by(annotation) %>% 
@@ -357,6 +363,7 @@ main = function(individual_path, integrated_path, anno_paths, anno_labels, sortm
 }
 
 main(sortmethod= snakemake@params[["sortmethod"]],
+     refpt = snakemake@params[["refpoint"]],
      refptlabel = snakemake@params[["refptlabel"]],
      condition= snakemake@wildcards[["condition"]],
      control= snakemake@wildcards[["control"]],

@@ -31,5 +31,5 @@ find . -name "*.svg" ! -path "*.git*" ! -path "*.snakemake*" ! -name "rulegraph.
         height=$(echo $dim | cut -d ' ' -f2 | paste - <(echo \*326\/96) | bc -l)
         svg2png -w $width -h $height -o $png $svg
     fi
-    echo "mogrification complete!"
 done
+echo "mogrification complete!"

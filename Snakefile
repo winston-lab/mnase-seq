@@ -654,6 +654,7 @@ rule danpos_vis_over_annotations:
         integrated_displacement_meta = "nucleosome_calling/regions/{figure}/{condition}-v-{control}/{figure}-{condition}-v-{control}-integrated-displacement-metagene.svg",
     params:
         anno_labels = lambda wc: [v["label"] for k,v in QUANT[wc.figure]["annotations"].items()],
+        refpoint = lambda wc: QUANT[wc.figure]["refpoint"],
         refptlabel = lambda wc: QUANT[wc.figure]["refpointlabel"],
         sortmethod = lambda wc: QUANT[wc.figure]["arrange"],
         binsize = lambda wc: QUANT[wc.figure]["binsize"],
