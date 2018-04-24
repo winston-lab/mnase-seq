@@ -27,8 +27,8 @@ main = function(individual_path, integrated_path, anno_paths, anno_labels, sortm
         select(-c(start, end))
     if(refpt=="center"){
         individual = individual %>%
-            mutate(start = as.integer((start+end)/2),
-                   end = as.integer(start+1))
+            mutate(feat_start = as.integer((feat_start+feat_end)/2),
+                   feat_end = as.integer(feat_start+1))
     }
     individual = individual %>%
         mutate_at(vars(nuc_start, nuc_end, nuc_summit),
