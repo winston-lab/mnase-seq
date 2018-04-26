@@ -9,6 +9,10 @@ sisamples = {k:v for (k,v) in SAMPLES.items() if v["spikein"]=="y"}
 PASSING = {k:v for (k,v) in SAMPLES.items() if v["pass-qc"] == "pass"}
 sipassing = {k:v for (k,v) in PASSING.items() if v["spikein"] == "y"}
 
+# if there are samples with spikein, import csv for danpos2 step
+if sipassing:
+    import csv
+
 controlgroups = config["comparisons"]["libsizenorm"]["controls"]
 conditiongroups = config["comparisons"]["libsizenorm"]["conditions"]
 
@@ -58,24 +62,23 @@ rule all:
         expand(expand("datavis/{{figure}}/libsizenorm/{condition}-v-{control}/{{status}}/{{readtype}}/mnase-{{figure}}-libsizenorm-{{status}}_{condition}-v-{control}_{{readtype}}-heatmap-bysample.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), figure=FIGURES, readtype=["midpoint","wholefrag"], status=["all","passing"]) if sisamples else
         expand(expand("datavis/{{figure}}/libsizenorm/{condition}-v-{control}/{{status}}/{{readtype}}/mnase-{{figure}}-libsizenorm-{{status}}_{condition}-v-{control}_{{readtype}}-heatmap-bysample.svg", zip, condition=conditiongroups+["all"], control=controlgroups+["all"]), figure=FIGURES, readtype=["midpoint","wholefrag"], status=["all","passing"]),
         #call nucleosomes 
-        expand("nucleosome_calling/{condition}-v-{control}/reference_positions.xls", zip, condition=conditiongroups, control=controlgroups),
-        expand("nucleosome_calling/{condition}-v-{control}/{condition}-v-{control}_dyad-shift-histogram.svg", zip, condition=conditiongroups, control=controlgroups),
+        expand("nucleosome_calling/{condition}-v-{control}/spikenorm/reference_positions.xls", zip, condition=conditiongroups_si, control=controlgroups_si) + expand("nucleosome_calling/{condition}-v-{control}/libsizenorm/reference_positions.xls", zip, condition=conditiongroups, control=controlgroups) if sipassing else expand("nucleosome_calling/{condition}-v-{control}/libsizenorm/reference_positions.xls", zip, condition=conditiongroups, control=controlgroups),
+        expand("nucleosome_calling/{condition}-v-{control}/spikenorm/{condition}-v-{control}_spikenorm-dyad-shift-histogram.svg", zip, condition=conditiongroups_si, control=controlgroups_si) + expand("nucleosome_calling/{condition}-v-{control}/libsizenorm/{condition}-v-{control}_libsizenorm-dyad-shift-histogram.svg", zip, condition=conditiongroups, control=controlgroups) if sipassing else expand("nucleosome_calling/{condition}-v-{control}/libsizenorm/{condition}-v-{control}_libsizenorm-dyad-shift-histogram.svg", zip, condition=conditiongroups, control=controlgroups),
         #danpos over annotations
-        expand(expand("nucleosome_calling/regions/{{figure}}/{condition}-v-{control}/{{figure}}-{condition}-v-{control}-individual-occupancy-heatmaps.svg", zip, condition=conditiongroups, control=controlgroups), figure=QUANT),
+        expand(expand("nucleosome_calling/regions/{{figure}}/spikenorm/{condition}-v-{control}/{{figure}}_{condition}-v-{control}_spikenorm-individual-occupancy-heatmaps.svg", zip, condition=conditiongroups_si, control=controlgroups_si), figure=QUANT) + expand(expand("nucleosome_calling/regions/{{figure}}/libsizenorm/{condition}-v-{control}/{{figure}}_{condition}-v-{control}_libsizenorm-individual-occupancy-heatmaps.svg", zip, condition=conditiongroups, control=controlgroups), figure=QUANT) if sipassing else expand(expand("nucleosome_calling/regions/{{figure}}/libsizenorm/{condition}-v-{control}/{{figure}}_{condition}-v-{control}_libsizenorm-individual-occupancy-heatmaps.svg", zip, condition=conditiongroups, control=controlgroups), figure=QUANT),
         #differential nucleosome levels over transcripts
-        expand("diff_levels/{condition}-v-{control}/libsizenorm/{condition}-v-{control}-results-libsizenorm-all.tsv", zip, condition=conditiongroups, control=controlgroups) + expand("diff_levels/{condition}-v-{control}/spikenorm/{condition}-v-{control}-results-spikenorm-all.tsv", zip, condition=conditiongroups_si, control=controlgroups_si) if sisamples else expand("diff_levels/{condition}-v-{control}/libsizenorm/{condition}-v-{control}-results-libsizenorm-all.tsv", zip, condition=conditiongroups, control=controlgroups)
+        expand("diff_levels/{condition}-v-{control}/libsizenorm/{condition}-v-{control}-results-libsizenorm-all.tsv", zip, condition=conditiongroups, control=controlgroups) + expand("diff_levels/{condition}-v-{control}/spikenorm/{condition}-v-{control}-results-spikenorm-all.tsv", zip, condition=conditiongroups_si, control=controlgroups_si) if sipassing else expand("diff_levels/{condition}-v-{control}/libsizenorm/{condition}-v-{control}-results-libsizenorm-all.tsv", zip, condition=conditiongroups, control=controlgroups)
 
 def plotcorrsamples(wc):
-    dd = SAMPLES if wc.status=="all" else PASSING
     if wc.condition=="all":
         if wc.norm=="libsizenorm": #condition==all,norm==lib
-            return list(dd.keys())
+            return list(SAMPLES.keys())
         else: #condition==all,norm==spike
-            return [k for k,v in dd.items() if v["spikein"]=="y"]
+            return list(sisamples.keys())
     elif wc.norm=="libsizenorm": #condition!=all;norm==lib
-        return [k for k,v in dd.items() if v["group"]==wc.control or v["group"]==wc.condition]
+        return [k for k,v in PASSING.items() if v["group"] in (wc.control, wc.condition)]
     else: #condition!=all;norm==spike
-        return [k for k,v in dd.items() if (v["group"]==wc.control or v["group"]==wc.condition) and v["spikein"]=="y"]
+        return [k for k,v in sipassing.items() if v["group"] in (wc.control, wc.condition)]
 
 def cluster_samples(status, norm, cluster_groups):
     dd = SAMPLES if status=="all" else PASSING
@@ -390,7 +393,7 @@ rule plot_si_pct:
         plot = "qual_ctrl/{status}/{status}-spikein-plots.svg",
         stats = "qual_ctrl/{status}/{status}-spikein-stats.tsv"
     params:
-        samplelist = lambda wc : [k for k,v in sisamples.items() if v["spikein"]=="y"] if wc.status=="all" else [k for k,v in sipassing.items() if v["spikein"]=="y"],
+        samplelist = lambda wc : sisamples if wc.status=="all" else sipassing,
         conditions = config["comparisons"]["spikenorm"]["conditions"],
         controls = config["comparisons"]["spikenorm"]["controls"],
     script: "scripts/plotsipct.R"
@@ -563,49 +566,72 @@ rule group_bam_for_danpos:
         cp {input} {output}
         """
 
-#TODO: spike-in normalization with --count
+# if using spikein normalization, set control to 10M reads and condition to 10M*(condition SI pct)/(control SI pct)
+def danpos_norm(wc):
+    if wc.norm=="spikenorm":
+        cond_count, ctrl_count, cond_val, ctrl_val = 0,0,0,0
+        with open(input.si_table) as si_table:
+            si_table = csv.reader(si_table, delimiter="\t")
+            for row in si_table:
+                if row[0] in [k for k,v in sipassing.items() if v["group"]==wc.condition]:
+                    vals = [int(x) for x in row[2].split()]
+                    #TODO: should really fix the sicounts file to be a proper tsv file...
+                    cond_val += vals[2]/vals[0]
+                    cond_count += 1
+                if row[0] in [k for k,v in sipassing.items() if v["group"]==wc.control]:
+                    vals = [int(x) for x in row[2].split()]
+                    ctrl_val += vals[2]/vals[0]
+                    ctrl_count += 1
+        spikein_counts = int((1e7*cond_val*ctrl_count)/(cond_count*ctrl_val))
+        spikein_string = "--count nucleosome_calling/data/{wildcards.condition}/:" + str(spikein_counts) + ",nucleosome_calling/data/{wildcards.control}/:" + str(int(1e7))
+        return spikein_string
+    else:
+        return ""
+
 rule danpos:
     input:
-        ["nucleosome_calling/data/" + SAMPLES[x]['group'] + "/" + x + ".bam" for x in SAMPLES]
+        bam = lambda wc: ["nucleosome_calling/data/" + PASSING[x]['group'] + "/" + x + ".bam" for x in PASSING] if wc.norm=="libsizenorm" else ["nucleosome_calling/data/" + sipassing[x]['group'] + "/" + x + ".bam" for x in sipassing],
+        si_table = lambda wc: [] if wc.norm=="libsizenorm" else "qual_ctrl/all/spikein-counts.tsv"
     output:
-        "nucleosome_calling/{condition}-v-{control}/nucleosome_calling_data_{condition}-nucleosome_calling_data_{control}.positions.integrative.xls",
-        "nucleosome_calling/{condition}-v-{control}/reference_positions.xls",
-        "nucleosome_calling/{condition}-v-{control}/diff/nucleosome_calling_data_{condition}-nucleosome_calling_data_{control}.pois_diff.wig",
-        "nucleosome_calling/{condition}-v-{control}/pooled/nucleosome_calling_data_{condition}.Fnor.smooth.positions.ref_adjust.xls",
-        "nucleosome_calling/{condition}-v-{control}/pooled/nucleosome_calling_data_{condition}.Fnor.smooth.positions.xls",
-        "nucleosome_calling/{condition}-v-{control}/pooled/nucleosome_calling_data_{condition}.Fnor.smooth.wig",
-        "nucleosome_calling/{condition}-v-{control}/pooled/nucleosome_calling_data_{control}.Fnor.smooth.positions.ref_adjust.xls",
-        "nucleosome_calling/{condition}-v-{control}/pooled/nucleosome_calling_data_{control}.Fnor.smooth.positions.xls",
-        "nucleosome_calling/{condition}-v-{control}/pooled/nucleosome_calling_data_{control}.Fnor.smooth.wig"
+        "nucleosome_calling/{condition}-v-{control}/{norm}/nucleosome_calling_data_{condition}-nucleosome_calling_data_{control}.positions.integrative.xls",
+        "nucleosome_calling/{condition}-v-{control}/{norm}/reference_positions.xls",
+        "nucleosome_calling/{condition}-v-{control}/{norm}/diff/nucleosome_calling_data_{condition}-nucleosome_calling_data_{control}.pois_diff.wig",
+        "nucleosome_calling/{condition}-v-{control}/{norm}/pooled/nucleosome_calling_data_{condition}.Fnor.smooth.positions.ref_adjust.xls",
+        "nucleosome_calling/{condition}-v-{control}/{norm}/pooled/nucleosome_calling_data_{condition}.Fnor.smooth.positions.xls",
+        "nucleosome_calling/{condition}-v-{control}/{norm}/pooled/nucleosome_calling_data_{condition}.Fnor.smooth.wig",
+        "nucleosome_calling/{condition}-v-{control}/{norm}/pooled/nucleosome_calling_data_{control}.Fnor.smooth.positions.ref_adjust.xls",
+        "nucleosome_calling/{condition}-v-{control}/{norm}/pooled/nucleosome_calling_data_{control}.Fnor.smooth.positions.xls",
+        "nucleosome_calling/{condition}-v-{control}/{norm}/pooled/nucleosome_calling_data_{control}.Fnor.smooth.wig"
+    params:
+        spikein_string = danpos_norm
     conda:
         "envs/danpos.yaml"
-    log: "logs/danpos/danpos-{condition}-v-{control}.log"
-    shell: """
-        (python scripts/danpos-2.2.2/danpos.py dpos nucleosome_calling/data/{wildcards.condition}/:nucleosome_calling/data/{wildcards.control}/ -m 1 -e 1 -a 1 -o nucleosome_calling/{wildcards.condition}-v-{wildcards.control}) &> {log}
-        """
+    log: "logs/danpos/danpos-{condition}-v-{control}-{norm}.log"
+    shell:
+        """(python scripts/danpos-2.2.2/danpos.py dpos nucleosome_calling/data/{wildcards.condition}/:nucleosome_calling/data/{wildcards.control}/ {params.spikein_string} --paired 1 --edge 1 --span 1 -o nucleosome_calling/{wildcards.condition}-v-{wildcards.control}/{wildcards.norm}) &> {log}"""
 
 rule plot_danpos_results:
     input:
-        results = "nucleosome_calling/{condition}-v-{control}/nucleosome_calling_data_{condition}-nucleosome_calling_data_{control}.positions.integrative.xls",
+        results = "nucleosome_calling/{condition}-v-{control}/{norm}/nucleosome_calling_data_{condition}-nucleosome_calling_data_{control}.positions.integrative.xls",
     output:
-        shift_hist = "nucleosome_calling/{condition}-v-{control}/{condition}-v-{control}_dyad-shift-histogram.svg",
-        occupancy_volcano = "nucleosome_calling/{condition}-v-{control}/{condition}-v-{control}_occupancy_volcano.svg",
-        fuzziness_volcano = "nucleosome_calling/{condition}-v-{control}/{condition}-v-{control}_fuzziness_volcano.svg",
-        occupancy_v_fuzziness = "nucleosome_calling/{condition}-v-{control}/{condition}-v-{control}_occupancy-v-fuzziness-scatter.svg",
-        occupancy_violin = "nucleosome_calling/{condition}-v-{control}/{condition}-v-{control}_occupancy-violin.svg",
-        occupancy_freqpoly = "nucleosome_calling/{condition}-v-{control}/{condition}-v-{control}_occupancy-freqpoly.svg",
-        occupancy_ecdf = "nucleosome_calling/{condition}-v-{control}/{condition}-v-{control}_occupancy-ecdf.svg",
-        fuzziness_violin = "nucleosome_calling/{condition}-v-{control}/{condition}-v-{control}_fuzziness-violin.svg",
-        fuzziness_freqpoly = "nucleosome_calling/{condition}-v-{control}/{condition}-v-{control}_fuzziness-freqpoly.svg",
-        fuzziness_ecdf = "nucleosome_calling/{condition}-v-{control}/{condition}-v-{control}_fuzziness-ecdf.svg"
+        shift_hist = "nucleosome_calling/{condition}-v-{control}/{norm}/{condition}-v-{control}_{norm}-dyad-shift-histogram.svg",
+        occupancy_volcano = "nucleosome_calling/{condition}-v-{control}/{norm}/{condition}-v-{control}_{norm}-occupancy_volcano.svg",
+        fuzziness_volcano = "nucleosome_calling/{condition}-v-{control}/{norm}/{condition}-v-{control}_{norm}-fuzziness_volcano.svg",
+        occupancy_v_fuzziness = "nucleosome_calling/{condition}-v-{control}/{norm}/{condition}-v-{control}_{norm}-occupancy-v-fuzziness-scatter.svg",
+        occupancy_violin = "nucleosome_calling/{condition}-v-{control}/{norm}/{condition}-v-{control}_{norm}-occupancy-violin.svg",
+        occupancy_freqpoly = "nucleosome_calling/{condition}-v-{control}/{norm}/{condition}-v-{control}_{norm}-occupancy-freqpoly.svg",
+        occupancy_ecdf = "nucleosome_calling/{condition}-v-{control}/{norm}/{condition}-v-{control}_{norm}-occupancy-ecdf.svg",
+        fuzziness_violin = "nucleosome_calling/{condition}-v-{control}/{norm}/{condition}-v-{control}_{norm}-fuzziness-violin.svg",
+        fuzziness_freqpoly = "nucleosome_calling/{condition}-v-{control}/{norm}/{condition}-v-{control}_{norm}-fuzziness-freqpoly.svg",
+        fuzziness_ecdf = "nucleosome_calling/{condition}-v-{control}/{norm}/{condition}-v-{control}_{norm}-fuzziness-ecdf.svg"
     script:
         "scripts/nucleosomes.R"
 
 rule danpos_over_annotations:
     input:
-        indiv_condition = "nucleosome_calling/{condition}-v-{control}/pooled/nucleosome_calling_data_{condition}.Fnor.smooth.positions.xls",
-        indiv_control = "nucleosome_calling/{condition}-v-{control}/pooled/nucleosome_calling_data_{control}.Fnor.smooth.positions.xls",
-        integrated = "nucleosome_calling/{condition}-v-{control}/nucleosome_calling_data_{condition}-nucleosome_calling_data_{control}.positions.integrative.xls",
+        indiv_condition = "nucleosome_calling/{condition}-v-{control}/{norm}/pooled/nucleosome_calling_data_{condition}.Fnor.smooth.positions.xls",
+        indiv_control = "nucleosome_calling/{condition}-v-{control}/{norm}/pooled/nucleosome_calling_data_{control}.Fnor.smooth.positions.xls",
+        integrated = "nucleosome_calling/{condition}-v-{control}/{norm}/nucleosome_calling_data_{condition}-nucleosome_calling_data_{control}.positions.integrative.xls",
         annotation = lambda wc: QUANT[wc.figure]["annotations"][wc.annotation]["path"],
         chrsizes = config["genome"]["chrsizes"]
     params:
@@ -613,8 +639,8 @@ rule danpos_over_annotations:
         dnstream = lambda wc: QUANT[wc.figure]["dnstream"],
         label = lambda wc: QUANT[wc.figure]["annotations"][wc.annotation]["label"]
     output:
-        individual = temp("nucleosome_calling/regions/{figure}/{condition}-v-{control}/{figure}_{annotation}-individual.tsv"),
-        integrated = temp("nucleosome_calling/regions/{figure}/{condition}-v-{control}/{figure}_{annotation}-integrated.tsv")
+        individual = temp("nucleosome_calling/regions/{figure}/{norm}/{condition}-v-{control}/{figure}_{annotation}_{norm}-individual.tsv"),
+        integrated = temp("nucleosome_calling/regions/{figure}/{norm}/{condition}-v-{control}/{figure}_{annotation}_{norm}-integrated.tsv")
     shell: """
         bedtools slop -i {input.annotation} -g {input.chrsizes} -l {params.upstream} -r {params.dnstream} -s | bedtools intersect -a stdin -b <(awk 'BEGIN{{FS=OFS="\t"}} NR>1 && $2>0' {input.indiv_control}) -wo | awk 'BEGIN{{FS=OFS="\t"}}{{print $0, "{wildcards.control}", "{params.label}"}}' | \
         cat - <(bedtools slop -i {input.annotation} -g {input.chrsizes} -l {params.upstream} -r {params.dnstream} -s | bedtools intersect -a stdin -b <(awk 'BEGIN{{FS=OFS="\t"}} NR>1 && $2>0' {input.indiv_condition}) -wo | awk 'BEGIN{{FS=OFS="\t"}}{{print $0, "{wildcards.condition}", "{params.label}"}}') > {output.individual}
@@ -623,11 +649,11 @@ rule danpos_over_annotations:
 
 rule cat_danpos_annotations:
     input:
-        individual = lambda wc: expand("nucleosome_calling/regions/{figure}/{condition}-v-{control}/{figure}_{annotation}-individual.tsv", annotation=[k for k,v in QUANT[wc.figure]["annotations"].items()], condition=wc.condition, control=wc.control, figure=wc.figure),
-        integrated = lambda wc: expand("nucleosome_calling/regions/{figure}/{condition}-v-{control}/{figure}_{annotation}-integrated.tsv", annotation=[k for k,v in QUANT[wc.figure]["annotations"].items()], condition=wc.condition, control=wc.control, figure=wc.figure)
+        individual = lambda wc: expand("nucleosome_calling/regions/{figure}/{norm}/{condition}-v-{control}/{figure}_{annotation}_{norm}-individual.tsv", annotation=[k for k,v in QUANT[wc.figure]["annotations"].items()], condition=wc.condition, control=wc.control, figure=wc.figure, norm=wc.norm),
+        integrated = lambda wc: expand("nucleosome_calling/regions/{figure}/{norm}/{condition}-v-{control}/{figure}_{annotation}_{norm}-integrated.tsv", annotation=[k for k,v in QUANT[wc.figure]["annotations"].items()], condition=wc.condition, control=wc.control, figure=wc.figure, norm=wc.norm)
     output:
-        individual = "nucleosome_calling/regions/{figure}/{condition}-v-{control}/{figure}-allannotations-individual.tsv",
-        integrated = "nucleosome_calling/regions/{figure}/{condition}-v-{control}/{figure}-allannotations-integrated.tsv",
+        individual = "nucleosome_calling/regions/{figure}/{norm}/{condition}-v-{control}/{figure}-allannotations-individual-{norm}.tsv",
+        integrated = "nucleosome_calling/regions/{figure}/{norm}/{condition}-v-{control}/{figure}-allannotations-integrated-{norm}.tsv",
     shell: """
         cat <(echo -e "chrom\tfeat_start\tfeat_end\tfeat_name\tfeat_score\tfeat_strand\tnuc_start\tnuc_end\tnuc_summit\toccupancy\tfuzziness\tgroup\tannotation") <(cut -f7,13 --complement {input.individual}) > {output.individual}
         cat <(echo -e "feat_chrom\tfeat_start\tfeat_end\tfeat_name\tfeat_score\tfeat_strand\tnuc_chrom\tnuc_start\tnuc_end\tnuc_center\tctrl_summit_loc\tcond_summit_loc\tdiff_summit_loc\tcond_ctrl_dist\tctrl_summit_val\tcond_summit_val\tsummit_lfc\tsummit_diff_logpval\tsummit_diff_fdr\tctrl_point_val\tcond_point_val\tpoint_lfc\tpoint_diff_logpval\tpoint_diff_fdr\tctrl_fuzziness\tcond_fuzziness\tfuzziness_lfc\tfuzziness_diff_logpval\tfuzziness_diff_fdr\toverlap\tannotation") {input.integrated} >  {output.integrated}
@@ -635,23 +661,23 @@ rule cat_danpos_annotations:
 
 rule danpos_vis_over_annotations:
     input:
-        individual = "nucleosome_calling/regions/{figure}/{condition}-v-{control}/{figure}-allannotations-individual.tsv",
-        integrated = "nucleosome_calling/regions/{figure}/{condition}-v-{control}/{figure}-allannotations-integrated.tsv",
+        individual = "nucleosome_calling/regions/{figure}/{norm}/{condition}-v-{control}/{figure}-allannotations-individual-{norm}.tsv",
+        integrated = "nucleosome_calling/regions/{figure}/{norm}/{condition}-v-{control}/{figure}-allannotations-integrated-{norm}.tsv",
         annotations = lambda wc: [v["path"] for k,v in QUANT[wc.figure]["annotations"].items()]
     output:
-        indiv_occ_hmap = "nucleosome_calling/regions/{figure}/{condition}-v-{control}/{figure}-{condition}-v-{control}-individual-occupancy-heatmaps.svg",
-        indiv_fuzz_hmap = "nucleosome_calling/regions/{figure}/{condition}-v-{control}/{figure}-{condition}-v-{control}-individual-fuzziness-heatmaps.svg",
-        indiv_occ_meta = "nucleosome_calling/regions/{figure}/{condition}-v-{control}/{figure}-{condition}-v-{control}-individual-occupancy-metagene.svg",
-        indiv_fuzz_meta = "nucleosome_calling/regions/{figure}/{condition}-v-{control}/{figure}-{condition}-v-{control}-individual-fuzziness-metagene.svg",
-        integrated_occ_summit_hmap = "nucleosome_calling/regions/{figure}/{condition}-v-{control}/{figure}-{condition}-v-{control}-integrated-summit-occupancy-heatmap.svg",
-        integrated_occ_point_hmap = "nucleosome_calling/regions/{figure}/{condition}-v-{control}/{figure}-{condition}-v-{control}-integrated-point-occupancy-heatmap.svg",
-        integrated_fuzz_hmap = "nucleosome_calling/regions/{figure}/{condition}-v-{control}/{figure}-{condition}-v-{control}-integrated-fuzziness-heatmap.svg",
-        integrated_displacement_hmap = "nucleosome_calling/regions/{figure}/{condition}-v-{control}/{figure}-{condition}-v-{control}-integrated-displacement-heatmap.svg",
-        integrated_displacement_segment_hmap = "nucleosome_calling/regions/{figure}/{condition}-v-{control}/{figure}-{condition}-v-{control}-integrated-displacement-segment-heatmap.svg",
-        integrated_occ_summit_meta = "nucleosome_calling/regions/{figure}/{condition}-v-{control}/{figure}-{condition}-v-{control}-integrated-summit-occupancy-metagene.svg",
-        integrated_occ_point_meta = "nucleosome_calling/regions/{figure}/{condition}-v-{control}/{figure}-{condition}-v-{control}-integrated-point-occupancy-metagene.svg",
-        integrated_fuzz_meta = "nucleosome_calling/regions/{figure}/{condition}-v-{control}/{figure}-{condition}-v-{control}-integrated-fuzziness-metagene.svg",
-        integrated_displacement_meta = "nucleosome_calling/regions/{figure}/{condition}-v-{control}/{figure}-{condition}-v-{control}-integrated-displacement-metagene.svg",
+        indiv_occ_hmap = "nucleosome_calling/regions/{figure}/{norm}/{condition}-v-{control}/{figure}_{condition}-v-{control}_{norm}-individual-occupancy-heatmaps.svg",
+        indiv_fuzz_hmap = "nucleosome_calling/regions/{figure}/{norm}/{condition}-v-{control}/{figure}_{condition}-v-{control}_{norm}-individual-fuzziness-heatmaps.svg",
+        indiv_occ_meta = "nucleosome_calling/regions/{figure}/{norm}/{condition}-v-{control}/{figure}_{condition}-v-{control}_{norm}-individual-occupancy-metagene.svg",
+        indiv_fuzz_meta = "nucleosome_calling/regions/{figure}/{norm}/{condition}-v-{control}/{figure}_{condition}-v-{control}_{norm}-individual-fuzziness-metagene.svg",
+        integrated_occ_summit_hmap = "nucleosome_calling/regions/{figure}/{norm}/{condition}-v-{control}/{figure}_{condition}-v-{control}_{norm}-integrated-summit-occupancy-heatmap.svg",
+        integrated_occ_point_hmap = "nucleosome_calling/regions/{figure}/{norm}/{condition}-v-{control}/{figure}_{condition}-v-{control}_{norm}-integrated-point-occupancy-heatmap.svg",
+        integrated_fuzz_hmap = "nucleosome_calling/regions/{figure}/{norm}/{condition}-v-{control}/{figure}_{condition}-v-{control}_{norm}-integrated-fuzziness-heatmap.svg",
+        integrated_displacement_hmap = "nucleosome_calling/regions/{figure}/{norm}/{condition}-v-{control}/{figure}_{condition}-v-{control}_{norm}-integrated-displacement-heatmap.svg",
+        integrated_displacement_segment_hmap = "nucleosome_calling/regions/{norm}/{figure}/{condition}-v-{control}/{figure}_{condition}-v-{control}_{norm}-integrated-displacement-segment-heatmap.svg",
+        integrated_occ_summit_meta = "nucleosome_calling/regions/{figure}/{norm}/{condition}-v-{control}/{figure}_{condition}-v-{control}_{norm}-integrated-summit-occupancy-metagene.svg",
+        integrated_occ_point_meta = "nucleosome_calling/regions/{figure}/{norm}/{condition}-v-{control}/{figure}_{condition}-v-{control}_{norm}-integrated-point-occupancy-metagene.svg",
+        integrated_fuzz_meta = "nucleosome_calling/regions/{figure}/{norm}/{condition}-v-{control}/{figure}_{condition}-v-{control}_{norm}-integrated-fuzziness-metagene.svg",
+        integrated_displacement_meta = "nucleosome_calling/regions/{figure}/{norm}/{condition}-v-{control}/{figure}_{condition}-v-{control}_{norm}-integrated-displacement-metagene.svg",
     params:
         anno_labels = lambda wc: [v["label"] for k,v in QUANT[wc.figure]["annotations"].items()],
         refpoint = lambda wc: QUANT[wc.figure]["refpoint"],
