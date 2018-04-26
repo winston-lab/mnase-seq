@@ -567,23 +567,23 @@ rule group_bam_for_danpos:
         """
 
 # if using spikein normalization, set control to 10M reads and condition to 10M*(condition SI pct)/(control SI pct)
-def danpos_norm(wc):
-    if wc.norm=="spikenorm":
+def danpos_norm(norm, condition, control, si_table):
+    if norm=="spikenorm":
         cond_count, ctrl_count, cond_val, ctrl_val = 0,0,0,0
-        with open(input.si_table) as si_table:
+        with open(si_table) as si_table:
             si_table = csv.reader(si_table, delimiter="\t")
             for row in si_table:
-                if row[0] in [k for k,v in sipassing.items() if v["group"]==wc.condition]:
+                if row[0] in [k for k,v in sipassing.items() if v["group"]==condition]:
                     vals = [int(x) for x in row[2].split()]
                     #TODO: should really fix the sicounts file to be a proper tsv file...
                     cond_val += vals[2]/vals[0]
                     cond_count += 1
-                if row[0] in [k for k,v in sipassing.items() if v["group"]==wc.control]:
+                if row[0] in [k for k,v in sipassing.items() if v["group"]==control]:
                     vals = [int(x) for x in row[2].split()]
                     ctrl_val += vals[2]/vals[0]
                     ctrl_count += 1
         spikein_counts = int((1e7*cond_val*ctrl_count)/(cond_count*ctrl_val))
-        spikein_string = "--count nucleosome_calling/data/{wildcards.condition}/:" + str(spikein_counts) + ",nucleosome_calling/data/{wildcards.control}/:" + str(int(1e7))
+        spikein_string = "--count nucleosome_calling/data/" + condition + "/:" + str(spikein_counts) + ",nucleosome_calling/data/" + control + "/:" + str(int(1e7))
         return spikein_string
     else:
         return ""
@@ -603,7 +603,7 @@ rule danpos:
         "nucleosome_calling/{condition}-v-{control}/{norm}/pooled/nucleosome_calling_data_{control}.Fnor.smooth.positions.xls",
         "nucleosome_calling/{condition}-v-{control}/{norm}/pooled/nucleosome_calling_data_{control}.Fnor.smooth.wig"
     params:
-        spikein_string = danpos_norm
+        spikein_string = lambda wc: danpos_norm(wc.norm, wc.condition, wc.control, "qual_ctrl/all/spikein-counts.tsv")
     conda:
         "envs/danpos.yaml"
     log: "logs/danpos/danpos-{condition}-v-{control}-{norm}.log"
