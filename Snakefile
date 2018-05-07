@@ -582,7 +582,9 @@ def danpos_norm(norm, condition, control, si_table):
                     vals = [int(x) for x in row[2].split()]
                     ctrl_val += vals[2]/vals[0]
                     ctrl_count += 1
-        spikein_counts = int((1e7*cond_val*ctrl_count)/(cond_count*ctrl_val))
+        cond_sipct = cond_val/cond_count
+        ctrl_sipct = ctrl_val/ctrl_count
+        spikein_counts = 1e7*ctrl_sipct*(1-cond_sipct)/((1-ctrl_sipct)*cond_sipct)
         spikein_string = "--count nucleosome_calling/data/" + condition + "/:" + str(spikein_counts) + ",nucleosome_calling/data/" + control + "/:" + str(int(1e7))
         return spikein_string
     else:
