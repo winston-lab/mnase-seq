@@ -5,20 +5,20 @@ import itertools
 configfile: "config.yaml"
 
 SAMPLES = config["samples"]
-sisamples = {k:v for (k,v) in SAMPLES.items() if v["spikein"]=="y"}
-PASSING = {k:v for (k,v) in SAMPLES.items() if v["pass-qc"] == "pass"}
-sipassing = {k:v for (k,v) in PASSING.items() if v["spikein"] == "y"}
+sisamples = {k:v for k,v in SAMPLES.items() if v["spikein"] == "y"}
+PASSING = {k:v for k,v in SAMPLES.items() if v["pass-qc"] == "pass"}
+sipassing = {k:v for k,v in PASSING.items() if v["spikein"] == "y"}
 
 # if there are samples with spikein, import csv for danpos2 step
 if sipassing:
     import csv
 
-controlgroups = config["comparisons"]["libsizenorm"]["controls"]
-conditiongroups = config["comparisons"]["libsizenorm"]["conditions"]
+controlgroups = [v for k,v in config["comparisons"]["libsizenorm"].items()]
+conditiongroups = [k for k,v in config["comparisons"]["libsizenorm"].items()]
 
 if sipassing:
-    controlgroups_si = config["comparisons"]["spikenorm"]["controls"]
-    conditiongroups_si = config["comparisons"]["spikenorm"]["conditions"]
+    controlgroups_si = [v for k,v in config["comparisons"]["spikenorm"].items()]
+    conditiongroups_si = [k for k,v in config["comparisons"]["spikenorm"].items()]
 
 COUNTTYPES = ["counts", "sicounts"] if sisamples else ["counts"]
 NORMS = ["libsizenorm", "spikenorm"] if sisamples else ["libsizenorm"]
@@ -394,8 +394,8 @@ rule plot_si_pct:
         stats = "qual_ctrl/{status}/{status}-spikein-stats.tsv"
     params:
         samplelist = lambda wc : sisamples if wc.status=="all" else sipassing,
-        conditions = config["comparisons"]["spikenorm"]["conditions"],
-        controls = config["comparisons"]["spikenorm"]["controls"],
+        conditions = conditiongroups_si if sisamples else [],
+        controls = controlgroups_si if sisamples else [],
     script: "scripts/plotsipct.R"
 
 rule whole_fragment_coverage:
