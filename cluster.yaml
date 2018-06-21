@@ -1,4 +1,4 @@
-__default__ : 
+__default__ :
     queue : "short"
     time : 60
     n : 1
@@ -13,13 +13,13 @@ fastqc_raw:
     mem : 6000
 
 demultiplex:
-    time : 180 
+    time : 180
     mem : 6000
 
 cutadapt:
     time : 120
     n : 1
-    mem : 4000 
+    mem : 4000
 
 fastqc_processed:
     time : 60
@@ -31,12 +31,12 @@ plot_fastqc_summary:
     mem: 10000
 
 align:
-    time : 60 
+    time : 60
     n : 4
     mem : 2000
 
 bam_separate_species:
-    time: 15 
+    time: 15
     mem: 2000
 
 get_fragment_lengths:
@@ -45,7 +45,7 @@ get_fragment_lengths:
     mem: 4000
 
 get_fragments:
-    time : 45 
+    time : 45
     n : 2
     mem : 4000
 
@@ -55,7 +55,7 @@ midpoint_coverage:
 
 whole_fragment_coverage:
     time : 60
-    mem : 2000 
+    mem : 2000
 
 normalize:
     time: 10
@@ -98,7 +98,7 @@ bg_to_bw:
     mem: 2000
 
 compute_matrix:
-    time : 15 
+    time : 15
     n : 1
     mem : 2000
 
@@ -107,11 +107,11 @@ cat_matrices:
     mem : 2000
 
 plot_figures:
-    time : 40 
+    time : 40
     mem : 10000
 
 # plot_metagenes:
-#     time : 20 
+#     time : 20
 #     mem : 10000
 
 danpos:
