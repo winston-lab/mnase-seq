@@ -43,11 +43,11 @@ rule all:
         #fastqc
         'qual_ctrl/fastqc/mnase-seq-per_base_quality.svg',
         #alignment
-        expand("alignment/{sample}.bam", sample=SAMPLES),
-        ##coverage
-        #expand("coverage/{counttype}/{sample}-mnase-{readtype}-{counttype}.bedgraph", sample=SAMPLES, readtype=["midpoint","wholefrag"], counttype=COUNTTYPES),
-        #expand("coverage/{norm}/{sample}-mnase-{readtype}-{norm}.bedgraph", norm=NORMS, sample=SAMPLES, readtype=["midpoint","wholefrag"]),
-        #expand("coverage/{norm}/{sample}-mnase-midpoint_smoothed-{norm}.bw", norm=NORMS, sample=SAMPLES),
+        expand("alignment/{sample}_mnase-seq.bam", sample=SAMPLES),
+        #coverage
+        expand("coverage/{counttype}/{sample}_mnase-{readtype}-{counttype}.bedgraph", sample=SAMPLES, readtype=["midpoint","wholefrag"], counttype=COUNTTYPES),
+        expand("coverage/{norm}/{sample}_mnase-{readtype}-{norm}.bedgraph", norm=NORMS, sample=SAMPLES, readtype=["midpoint","wholefrag"]),
+        expand("coverage/{norm}/{sample}_mnase-midpoint_smoothed-{norm}.bw", norm=NORMS, sample=SAMPLES),
         ##quality controls
         #"qual_ctrl/read_processing-loss.svg",
         #"qual_ctrl/all/fragment_length_distributions.tsv",

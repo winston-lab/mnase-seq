@@ -12,14 +12,11 @@ rule bowtie_build:
         expand(config["bowtie"]["index-path"] + "/{{basename}}.rev.{num}.ebwt", num=[1,2]),
     params:
         idx_path = config["bowtie"]["index-path"],
-        prefix = config["combinedgenome"]["experimental_prefix"]
     log:
         "logs/bowtie-build_{basename}.log"
-    run:
-        if sisamples:
-            shell("(bowtie-build {input.fasta} {params.idx_path}/{wildcards.basename}) &> {log}")
-        else:
-            shell("(sed -e 's/>/>{params.prefix}/g' {input.fasta} > .{params.prefix}.fa; bowtie-build .{params.prefix}.fa {params.idx_path}/{wildcards.basename}; rm .{params.prefix}.fa) &> {log}")
+    shell: """
+        (bowtie-build {input.fasta} {params.idx_path}/{wildcards.basename}) &> {log}
+        """
 
 #align with Bowtie 1
 #in Christine's paper, Burak uses -m 10 --best
@@ -30,7 +27,7 @@ rule align:
         r1 = "fastq/cleaned/{sample}-cleaned.r1.fastq.gz",
         r2 = "fastq/cleaned/{sample}-cleaned.r2.fastq.gz"
     output:
-        bam ="alignment/{sample}.bam",
+        bam ="alignment/{sample}_mnase-seq.bam",
         aligned_1_gz = "fastq/aligned/{sample}-aligned.r1.fastq.gz",
         aligned_2_gz = "fastq/aligned/{sample}-aligned.r2.fastq.gz",
         unaligned_1_gz = "fastq/unaligned/{sample}-unaligned.r1.fastq.gz",
@@ -55,9 +52,9 @@ rule align:
 #the index is required to use region arguments in samtools view to separate the species
 rule index_bam:
     input:
-        "alignment/{sample}.bam"
+        "alignment/{sample}_mnase-seq.bam",
     output:
-        "alignment/{sample}.bam.bai"
+        "alignment/{sample}_mnase-seq.bam.bai",
     log:
         "logs/samtools_index/samtools_index-{sample}.log"
     shell: """
@@ -66,11 +63,11 @@ rule index_bam:
 
 rule bam_separate_species:
     input:
-        bam = "alignment/{sample}.bam",
-        bai = "alignment/{sample}.bam.bai",
+        bam = "alignment/{sample}_mnase-seq.bam",
+        bai = "alignment/{sample}_mnase-seq.bam.bai",
         chrsizes = config["combinedgenome"]["chrsizes"]
     output:
-        "alignment/{sample}_{species}.bam"
+        "alignment/{sample}_mnase-seq-{species}.bam"
     params:
         keep_prefix = lambda wc: config["combinedgenome"]["experimental_prefix"] if wc.species=="experimental" else config["combinedgenome"]["spikein_prefix"],
         discard_prefix = lambda wc: config["combinedgenome"]["spikein_prefix"] if wc.species=="experimental" else config["combinedgenome"]["experimental_prefix"],

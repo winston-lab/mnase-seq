@@ -53,8 +53,16 @@ whole_fragment_coverage:
     time : 60
     mem : 2000
 
-normalize:
+smoothed_midpoint_coverage:
+    time : 60
+    mem : 2000
+
+normalize_genome_coverage:
     time: 10
+    mem: 2000
+
+bedgraph_to_bigwig:
+    time: 15
     mem: 2000
 
 map_to_windows:
@@ -84,14 +92,6 @@ get_perbase_depth:
 plot_depth:
     time : 60
     mem : 4000
-
-smoothed_midpoint_coverage:
-    time : 60
-    mem : 2000
-
-bg_to_bw:
-    time: 15
-    mem: 2000
 
 compute_matrix:
     time : 15

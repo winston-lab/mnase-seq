@@ -2,11 +2,11 @@
 
 rule get_fragment_lengths:
     input:
-        expand("alignment/{sample}_experimental.bam", sample=SAMPLES)
+        expand("alignment/{sample}_mnase-seq-experimental.bam", sample=SAMPLES) if sisamples else expand("alignment/{sample}_mnase-seq.bam", sample=SAMPLES)
     params:
         header = "\t".join(["fragsize"] + list(SAMPLES.keys()))
     output:
-        "qual_ctrl/all/fragment_length_distributions.tsv"
+        "qual_ctrl/fragment_length_distributions/mnase-seq_fragment_length_distributions.tsv"
     threads: config["threads"]
     run:
         bam = input[0]
@@ -18,7 +18,7 @@ rule get_fragment_lengths:
 #bam must be sorted by name for bedpe. We don't do this in the bowtie step since samtools indexing required position-sorted bam.
 rule get_fragments:
     input:
-        bam = "alignment/{sample}_{species}.bam"
+        bam = "alignment/{sample}_mnase-seq-{species}.bam" if sisamples else "alignment/{sample}_mnase-seq.bam"
     output:
         "alignment/fragments/{sample}_{species}-fragments.bedpe"
     threads: config["threads"]
@@ -29,63 +29,61 @@ rule get_fragments:
 
 rule midpoint_coverage:
     input:
-        bedpe = lambda wc: "alignment/fragments/" + wc.sample + "-" + config["combinedgenome"]["experimental_prefix"] + "fragments.bedpe" if wc.counttype=="counts" else "alignment/fragments/" + wc.sample + "-" + config["combinedgenome"]["spikein_prefix"] + "fragments.bedpe",
+        bedpe = lambda wc: f"alignment/fragments/{wc.sample}_experimental-fragments.bedpe" if wc.counttype=="counts" else "alignment/fragments/{wc.sample}_spikein-fragments.bedpe",
         chrsizes = lambda wc: config["genome"]["chrsizes"] if wc.counttype=="counts" else config["genome"]["sichrsizes"]
-    params:
-        prefix = lambda wc: config["combinedgenome"]["experimental_prefix"] if wc.counttype=="counts" else config["combinedgenome"]["spikein_prefix"]
     output:
-        "coverage/{counttype,counts|sicounts}/{sample}-mnase-midpoint-{counttype}.bedgraph"
-    log: "logs/midpoint_coverage/midpoint_coverage-{sample}-{counttype}.log"
+        "coverage/{counttype,counts|sicounts}/{sample}_mnase-midpoint-{counttype}.bedgraph"
+    log: "logs/midpoint_coverage/midpoint_coverage_{sample}-{counttype}.log"
     shell: """
         (awk 'BEGIN{{FS=OFS="\t"}} {{width=$6-$2}} {{(width % 2 != 0)? (mid=(width+1)/2+$2) : ((rand()<0.5)? (mid=width/2+$2) : (mid=width/2+$2+1))}} {{print $1, mid, mid+1, $7}}' {input.bedpe} | sort -k1,1 -k2,2n | bedtools genomecov -i stdin -g {input.chrsizes} -bga | sort -k1,1 -k2,2n > {output}) &> {log}
         """
 
 rule whole_fragment_coverage:
     input:
-        bam = lambda wc: "alignment/" + wc.sample + "_" + config["combinedgenome"]["experimental_prefix"] + "only.bam" if wc.counttype=="counts" else "alignment/" + wc.sample + "_" + config["combinedgenome"]["spikein_prefix"] + "only.bam",
+        bam = lambda wc: f"alignment/{wc.sample}_mnase-seq-experimental.bam" if wc.counttype=="counts" and sisamples else f"alignment/{wc.sample}_mnase-seq.bam" if wc.counttype=="counts" else f"alignment/{wc.sample}_mnase-seq-spikein.bam",
     output:
-        "coverage/{counttype}/{sample}-mnase-wholefrag-{counttype}.bedgraph"
+        "coverage/{counttype}/{sample}_mnase-wholefrag-{counttype}.bedgraph"
     wildcard_constraints:
         counttype="counts|sicounts"
-    log : "logs/total_coverage/total_coverage-{sample}-{counttype}.log"
+    log : "logs/whole_fragment_coverage/whole_fragment_coverage_{sample}-{counttype}.log"
     shell: """
         (bedtools genomecov -ibam {input.bam} -bga -pc | sort -k1,1 -k2,2n > {output}) &> {log}
         """
 
-rule normalize:
+rule normalize_genome_coverage:
     input:
-        coverage = "coverage/counts/{sample}-mnase-{readtype}-counts.bedgraph",
-        fragcounts = lambda wc: "coverage/counts/" + wc.sample + "-mnase-midpoint-counts.bedgraph" if wc.norm=="libsizenorm" else "coverage/sicounts/" + wc.sample + "-mnase-midpoint-sicounts.bedgraph"
-    params:
-        scalefactor = lambda wc: config["spikein-pct"] if wc.norm=="spikenorm" else 1
+        counts = "coverage/counts/{sample}_mnase-{readtype}-counts.bedgraph",
+        bam = lambda wc: f"alignment/{wc.sample}_mnase-seq-experimental.bam" if wc.norm=="libsizenorm" and sisamples else f"alignment/{wc.sample}_mnase-seq.bam" if wc.norm=="libsizenorm" else f"alignment/{wc.sample}_spikein.bam"
     output:
-        "coverage/{norm}/{sample}-mnase-{readtype}-{norm}.bedgraph"
+        normalized = "coverage/{norm}/{sample}_mnase-{readtype}-{norm}.bedgraph"
+    params:
+        scale_factor = lambda wc: config["spikein-pct"] if wc.norm=="spikenorm" else 1
     wildcard_constraints:
         norm="libsizenorm|spikenorm"
-    log: "logs/normalize/normalize-{sample}-{norm}-{readtype}.log"
+    log: "logs/normalize_genome_coverage/normalize_genome_coverage_{sample}-{norm}-{readtype}.log"
     shell: """
-        (bash scripts/libsizenorm.sh {input.fragcounts} {input.coverage} {params.scalefactor} > {output}) &> {log}
+        (awk -v norm_factor=$(samtools view -c {input.bam} | paste -d "" - <(echo "/({params.scale_factor}*1000000)") | bc -l) 'BEGIN{{FS=OFS="\t"}}{{$4=$4/norm_factor; print $0}}' {input.counts} > {output.normalized}) &> {log}
         """
 
-rule bg_to_bw:
+rule bedgraph_to_bigwig:
     input:
-        bedgraph = "coverage/{norm}/{sample}-mnase-{readtype}-{norm}.bedgraph",
+        bedgraph = "coverage/{norm}/{sample}_mnase-{readtype}-{norm}.bedgraph",
         chrsizes = lambda wc: config["genome"]["sichrsizes"] if wc.norm=="sicounts" else config["genome"]["chrsizes"]
     output:
-        "coverage/{norm}/{sample}-mnase-{readtype}-{norm}.bw"
-    log : "logs/bg_to_bw/bg_to_bw-{sample}-{readtype}-{norm}.log"
+        "coverage/{norm}/{sample}_mnase-{readtype}-{norm}.bw"
+    log : "logs/bedgraph_to_bigwig/bedgraph_to_bigwig_{sample}-{readtype}-{norm}.log"
     shell: """
         (bedGraphToBigWig {input.bedgraph} {input.chrsizes} {output}) &> {log}
         """
 
 rule smoothed_midpoint_coverage:
     input:
-        "coverage/{norm}/{sample}-mnase-midpoint-{norm}.bw"
+        "coverage/{norm}/{sample}_mnase-midpoint-{norm}.bw"
     output:
-        "coverage/{norm}/{sample}-mnase-midpoint_smoothed-{norm}.bw"
+        "coverage/{norm}/{sample}_mnase-midpoint_smoothed-{norm}.bw"
     params:
         bandwidth = config["smooth_bandwidth"]
-    log: "logs/smoothed_midpoint_coverage/smooth_midpoint_coverage-{sample}-{norm}.log"
+    log: "logs/smoothed_midpoint_coverage/smoothed_midpoint_coverage_{sample}-{norm}.log"
     shell: """
         (python scripts/smooth_midpoint_coverage.py -b {params.bandwidth} -i {input} -o {output}) &> {log}
         """

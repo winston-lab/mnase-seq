@@ -5,7 +5,7 @@ rule read_processing_numbers:
         adapter = expand("logs/clean_reads/clean_reads-{sample}.log", sample=SAMPLES),
         align = expand("logs/align/align-{sample}.log", sample=SAMPLES),
     output:
-        "qual_ctrl/read_processing_summary.tsv"
+        "qual_ctrl/read_processing/read_processing_summary.tsv"
     log: "logs/read_processing_summary.log"
     run:
         shell("""(echo -e "sample\traw\tcleaned\tmapped" > {output}) &> {log}""")
@@ -15,22 +15,22 @@ rule read_processing_numbers:
 
 rule plot_read_processing:
     input:
-        "qual_ctrl/read_processing_summary.tsv"
+        "qual_ctrl/read_processing/read_processing_summary.tsv"
     output:
-        surv_abs_out = "qual_ctrl/read_processing-survival-absolute.svg",
-        surv_rel_out = "qual_ctrl/read_processing-survival-relative.svg",
-        loss_out  = "qual_ctrl/read_processing-loss.svg",
+        surv_abs_out = "qual_ctrl/read_processing/read_processing-survival-absolute.svg",
+        surv_rel_out = "qual_ctrl/read_processing/read_processing-survival-relative.svg",
+        loss_out  = "qual_ctrl/read_processing/read_processing-loss.svg",
     script: "../scripts/processing_summary.R"
 
 rule build_spikein_counts_table:
     input:
-        total_bam = expand("alignment/{sample}.bam", sample=sisamples),
-        exp_bam = expand("alignment/{sample}_experimental.bam", sample=sisamples),
-        si_bam = expand("alignment/{sample}_spikein.bam", sample=sisamples),
+        total_bam = expand("alignment/{sample}_mnase-seq.bam", sample=sisamples),
+        exp_bam = expand("alignment/{sample}_mnase-seq-experimental.bam", sample=sisamples),
+        si_bam = expand("alignment/{sample}_mnase-seq-spikein.bam", sample=sisamples),
     params:
         groups = [v["group"] for k,v in sisamples.items()]
     output:
-        "qual_ctrl/all/spikein-counts.tsv"
+        "qual_ctrl/spikein/mnase-seq_spikein-counts.tsv"
     log: "logs/get_si_pct.log"
     run:
         shell("""(echo -e "sample\tgroup\ttotal_fragments\texperimental_fragments\tspikein_fragments" > {output}) &> {log} """)
@@ -39,10 +39,10 @@ rule build_spikein_counts_table:
 
 rule plot_si_pct:
     input:
-        "qual_ctrl/all/spikein-counts.tsv"
+        "qual_ctrl/spikein/mnase-seq_spikein-counts.tsv"
     output:
-        plot = "qual_ctrl/{status}/{status}-spikein-plots.svg",
-        stats = "qual_ctrl/{status}/{status}-spikein-stats.tsv"
+        plot = "qual_ctrl/spikein/mnase-seq_spikein-plots-{status}.svg",
+        stats = "qual_ctrl/spikein/mnase-seq_spikein-stats-{status}.tsv"
     params:
         samplelist = lambda wc : sisamples if wc.status=="all" else sipassing,
         conditions = conditiongroups_si if sisamples else [],
