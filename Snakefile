@@ -1,6 +1,8 @@
 #!/usr/bin/env python
-from math import log2
+import os
+import re
 import itertools
+from math import log2
 
 configfile: "config.yaml"
 
@@ -27,9 +29,6 @@ FIGURES = config["figures"]
 QUANT = config["quantification"]
 
 localrules: all,
-            make_barcode_file,
-            bowtie_build,
-            samtools_index,
             cat_matrices,
             group_bam_for_danpos,
             danpos_over_annotations,
@@ -41,10 +40,10 @@ onsuccess:
 
 rule all:
     input:
-        ##fastqc
-        #'qual_ctrl/fastqc/per_base_quality.svg',
-        ##alignment
-        #expand("alignment/{sample}.bam", sample=SAMPLES),
+        #fastqc
+        'qual_ctrl/fastqc/mnase-seq-per_base_quality.svg',
+        #alignment
+        expand("alignment/{sample}.bam", sample=SAMPLES),
         ##coverage
         #expand("coverage/{counttype}/{sample}-mnase-{readtype}-{counttype}.bedgraph", sample=SAMPLES, readtype=["midpoint","wholefrag"], counttype=COUNTTYPES),
         #expand("coverage/{norm}/{sample}-mnase-{readtype}-{norm}.bedgraph", norm=NORMS, sample=SAMPLES, readtype=["midpoint","wholefrag"]),

@@ -8,27 +8,23 @@ __default__ :
     err : "logs/cluster/{rule}.{wildcards}.err"
 
 fastqc_raw:
-    time : 75
-    n : 1
+    time : 45
+    n : 2
     mem : 6000
-
-demultiplex:
-    time : 180
-    mem : 6000
-
-cutadapt:
-    time : 120
-    n : 1
-    mem : 4000
 
 fastqc_processed:
-    time : 60
+    time : 30
     mem : 4000
 
 plot_fastqc_summary:
     time: 15
     n: 1
     mem: 10000
+
+clean_reads:
+    time : 60
+    n : 4
+    mem : 4000
 
 align:
     time : 60

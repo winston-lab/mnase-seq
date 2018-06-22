@@ -1,99 +1,149 @@
 #!/usr/bin/env python
 
+localrules:
+    make_barcode_file,
+    fastqc_aggregate
+
+# make a file containing adapters for fastQC to search
+# barcodes include the 'A' tail
+rule make_barcode_file:
+    output:
+        "fastq/barcodes.tsv"
+    run:
+        with open(output[0], "w") as out:
+            for sample, metadata in SAMPLES.items():
+                out.write(f'{sample}\t{metadata["barcode"]}T\n')
+
 #fastQC on raw (demultiplexed) sequencing data
 rule fastqc_raw:
     input:
-        r1 = "fastq/{sample}.r1.fastq.gz",
-        r2 = "fastq/{sample}.r2.fastq.gz",
-        adapters = "fastq/barcodes.tsv"
+        fastq = lambda wc: config["unmatched"][wc.readnumber] if wc.sample=="unmatched" else SAMPLES[wc.sample][wc.readnumber],
+        adapters = lambda wc: [] if wc.sample != "unmatched" else "fastq/barcodes.tsv"
     output:
-        "qual_ctrl/fastqc/raw/{sample}.r1_fastqc/fastqc_data.txt",
-        "qual_ctrl/fastqc/raw/{sample}.r2_fastqc/fastqc_data.txt",
+        "qual_ctrl/fastqc/raw/{sample}_{readnumber}_fastqc-data-raw.txt",
+    params:
+        fname = lambda wc: re.split('.fq|.fastq', os.path.split(config["unmatched"][wc.readnumber])[1])[0] if wc.sample=="unmatched" else re.split('.fq|.fastq', os.path.split(SAMPLES[wc.sample][wc.readnumber])[1])[0]
     threads : config["threads"]
-    log : "logs/fastqc_raw/fastqc_raw-{sample}.log"
+    log : "logs/fastqc_raw/fastqc_raw-{sample}-{readnumber}.log"
     run:
         if wildcards.sample=="unmatched":
             shell("""(mkdir -p qual_ctrl/fastqc/raw) &> {log};
-                    (fastqc -a {input.adapters} --nogroup --extract -t {threads} -o qual_ctrl/fastqc/raw {input.r1}) &>> {log};
-                    (fastqc -a {input.adapters} --nogroup --extract -t {threads} -o qual_ctrl/fastqc/raw {input.r2}) &>> {log}""")
+                    (fastqc --adapters {input.adapters} --nogroup --noextract -t {threads} -o qual_ctrl/fastqc/raw {input.fastq}) &>> {log};
+                    (unzip -p qual_ctrl/fastqc/raw/{params.fname}_fastqc.zip {params.fname}_fastqc/fastqc_data.txt > {output}) &>> {log}""")
         else:
-            adapter = SAMPLES[wildcards.sample]["barcode"]
+            adapter = SAMPLES[wildcards.sample]["barcode"]+"T"
             shell("""(mkdir -p qual_ctrl/fastqc/raw) &> {log};
-                    (fastqc -a <(echo -e "adapter\t{adapter}") --nogroup --extract -t {threads} -o qual_ctrl/fastqc/raw {input.r1}) &>> {log};
-                    (fastqc -a <(echo -e "adapter\t{adapter}") --nogroup --extract -t {threads} -o qual_ctrl/fastqc/raw {input.r2}) &>> {log}""")
+                    (fastqc --adapters <(echo -e "adapter\t{adapter}") --nogroup --noextract -t {threads} -o qual_ctrl/fastqc/raw {input.fastq}) &>> {log};
+                    (unzip -p qual_ctrl/fastqc/raw/{params.fname}_fastqc.zip {params.fname}_fastqc/fastqc_data.txt > {output}) &>> {log}""")
 
 #fastqc for cleaned, aligned, and unaligned reads
 #do the two reads sequentially to avoid fastqc bugs and problems with protected files (writing to same directory)
 rule fastqc_processed:
     input:
-        r1 = "fastq/{fqtype}/{sample}-{fqtype}.r1.fastq.gz",
-        r2 = "fastq/{fqtype}/{sample}-{fqtype}.r2.fastq.gz",
-    params:
-        adapter= lambda wc: SAMPLES[wc.sample]["barcode"]
+        fastq = "fastq/{fqtype}/{sample}-{fqtype}.{readnumber}.fastq.gz",
     output:
-        "qual_ctrl/fastqc/{fqtype}/{sample}-{fqtype}.r1_fastqc/fastqc_data.txt",
-        "qual_ctrl/fastqc/{fqtype}/{sample}-{fqtype}.r2_fastqc/fastqc_data.txt",
+        "qual_ctrl/fastqc/{fqtype}/{sample}_{readnumber}_fastqc-data-{fqtype}.txt",
+    params:
+        fname = lambda wc: "{sample}-{fqtype}.{readnumber}".format(**wc),
+        adapter= lambda wc: SAMPLES[wc.sample]["barcode"]+"T",
+    log: "logs/fastqc_processed/fastqc_processed-{sample}-{fqtype}-{readnumber}.log"
     threads: config["threads"]
-    log: "logs/fastqc_processed/fastqc_processed-{sample}-{fqtype}.log"
+    wildcard_constraints:
+        fqtype="cleaned|aligned|unaligned"
     shell: """
-        (mkdir -p qual_ctrl/fastqc/{wildcards.fqtype}) &> {log}
-        (fastqc -a <(echo -e "adapter\t{params.adapter}") --nogroup --extract -t {threads} -o qual_ctrl/fastqc/{wildcards.fqtype} {input.r1}) &>> {log}
-        (fastqc -a <(echo -e "adapter\t{params.adapter}") --nogroup --extract -t {threads} -o qual_ctrl/fastqc/{wildcards.fqtype} {input.r2}) &>> {log}
+        (mkdir -p qual_ctrl/fastqc/{wildcards.fqtype}) &> {log};
+        (fastqc --adapters <(echo -e "adapter\t{params.adapter}") --nogroup --noextract -t {threads} -o qual_ctrl/fastqc/{wildcards.fqtype} {input.fastq}) &>> {log};
+        (unzip -p qual_ctrl/fastqc/{wildcards.fqtype}/{params.fname}_fastqc.zip {params.fname}_fastqc/fastqc_data.txt > {output}) &>> {log}
         """
+
+fastqc_dict = {
+        "per_base_qual":
+        {   "title" : "Per base sequence quality",
+            "fields": "base\tmean\tmedian\tlower_quartile\tupper_quartile\tten_pct\tninety_pct\tsample\tstatus"
+            } ,
+        "per_tile_qual":
+        {   "title" : "Per tile sequence quality",
+            "fields": "tile\tbase\tmean\tsample\tstatus"
+            },
+        "per_seq_qual":
+        {   "title" : "Per sequence quality scores",
+            "fields": "quality\tcount\tsample\tstatus"
+            },
+        "per_base_seq_content":
+        {   "title" : "Per base sequence content",
+            "fields": "base\tg\ta\tt\tc\tsample\tstatus"
+            },
+        "per_seq_gc":
+        {   "title" : "Per sequence GC content",
+            "fields": "gc_content\tcount\tsample\tstatus"
+            },
+        "per_base_n":
+        {   "title" : "Per base N content",
+            "fields": "base\tn_count\tsample\tstatus"
+            },
+        "seq_length_dist":
+        {   "title" : "Sequence Length Distribution",
+            "fields": "length\tcount\tsample\tstatus"
+            },
+        "seq_duplication":
+        {   "title" : "Total Deduplicated Percentage",
+            "fields": "duplication_level\tpct_of_deduplicated\tpct_of_total\tsample\tstatus"
+            },
+        "adapter_content":
+        {   "title" : "Adapter Content",
+            "fields": "position\tpct\tsample\tstatus"
+            }
+        }
 
 rule fastqc_aggregate:
     input:
-        raw = expand("qual_ctrl/fastqc/raw/{sample}.{read}_fastqc/fastqc_data.txt", sample=["unmatched"] + list(SAMPLES.keys()), read=["r1", "r2"]),
-        cleaned = expand("qual_ctrl/fastqc/cleaned/{sample}-cleaned.{read}_fastqc/fastqc_data.txt", sample=SAMPLES, read=["r1","r2"]),
-        aligned = expand("qual_ctrl/fastqc/aligned/{sample}-aligned.{read}_fastqc/fastqc_data.txt", sample=SAMPLES, read=["r1","r2"]),
-        unaligned = expand("qual_ctrl/fastqc/unaligned/{sample}-unaligned.{read}_fastqc/fastqc_data.txt", sample=SAMPLES, read=["r1","r2"]),
+        raw = expand("qual_ctrl/fastqc/raw/{sample}_{read}_fastqc-data-raw.txt", sample=["unmatched"] + list(SAMPLES.keys()), read=["r1", "r2"]),
+        cleaned = expand("qual_ctrl/fastqc/cleaned/{sample}_{read}_fastqc-data-cleaned.txt", sample=SAMPLES, read=["r1", "r2"]),
+        aligned = expand("qual_ctrl/fastqc/aligned/{sample}_{read}_fastqc-data-aligned.txt", sample=SAMPLES, read=["r1", "r2"]),
+        unaligned = expand("qual_ctrl/fastqc/unaligned/{sample}_{read}_fastqc-data-unaligned.txt", sample=SAMPLES, read=["r1", "r2"]),
     output:
-        'qual_ctrl/fastqc/per_base_quality.tsv',
-        'qual_ctrl/fastqc/per_tile_quality.tsv',
-        'qual_ctrl/fastqc/per_sequence_quality.tsv',
-        'qual_ctrl/fastqc/per_base_sequence_content.tsv',
-        'qual_ctrl/fastqc/per_sequence_gc.tsv',
-        'qual_ctrl/fastqc/per_base_n.tsv',
-        'qual_ctrl/fastqc/sequence_length_distribution.tsv',
-        'qual_ctrl/fastqc/sequence_duplication_levels.tsv',
-        'qual_ctrl/fastqc/adapter_content.tsv',
-        'qual_ctrl/fastqc/kmer_content.tsv'
+        per_base_qual = 'qual_ctrl/fastqc/mnase-seq-per_base_quality.tsv',
+        per_tile_qual = 'qual_ctrl/fastqc/mnase-seq-per_tile_quality.tsv',
+        per_seq_qual =  'qual_ctrl/fastqc/mnase-seq-per_sequence_quality.tsv',
+        per_base_seq_content = 'qual_ctrl/fastqc/mnase-seq-per_base_sequence_content.tsv',
+        per_seq_gc = 'qual_ctrl/fastqc/mnase-seq-per_sequence_gc.tsv',
+        per_base_n = 'qual_ctrl/fastqc/mnase-seq-per_base_n.tsv',
+        seq_length_dist = 'qual_ctrl/fastqc/mnase-seq-sequence_length_distribution.tsv',
+        seq_duplication = 'qual_ctrl/fastqc/mnase-seq-sequence_duplication_levels.tsv',
+        adapter_content = 'qual_ctrl/fastqc/mnase-seq-adapter_content.tsv',
     run:
         shell("rm -f {output}")
-        #for each statistic
-        for outpath, stat, header in zip(output, ["Per base sequence quality", "Per tile sequence quality", "Per sequence quality scores", "Per base sequence content", "Per sequence GC content", "Per base N content", "Sequence Length Distribution", "Total Deduplicated Percentage", "Adapter Content", "Kmer Content"], ["base\tmean\tmedian\tlower_quartile\tupper_quartile\tten_pct\tninety_pct\tsample\tstatus", "tile\tbase\tmean\tsample\tstatus",
-        "quality\tcount\tsample\tstatus", "base\tg\ta\tt\tc\tsample\tstatus", "gc_content\tcount\tsample\tstatus", "base\tn_count\tsample\tstatus", "length\tcount\tsample\tstatus", "duplication_level\tpct_of_deduplicated\tpct_of_total\tsample\tstatus", "position\tpct\tsample\tstatus",
-        "sequence\tcount\tpval\tobs_over_exp_max\tmax_position\tsample\tstatus" ]):
-            for input_type in ["raw", "cleaned", "aligned", "unaligned"]:
-                sample_id_list = ["_".join(x) for x in itertools.product(["unmatched"]+list(SAMPLES.keys()), ["r1", "r2"])] if input_type=="raw" else ["_".join(x) for x in itertools.product(SAMPLES.keys(), ["r1", "r2"])]
-                for sample_id, fqc in zip(sample_id_list, input[input_type]):
-                    if sample_id in ["unmatched_r1", "unmatched_r2"] and stat=="Adapter Content":
-                        shell("""awk 'BEGIN{{FS=OFS="\t"}} /{stat}/{{flag=1;next}}/>>END_MODULE/{{flag=0}} flag {{m=$2;for(i=2;i<=NF-2;i++)if($i>m)m=$i; print $1, m, "{sample_id}", "{input_type}"}}' {fqc} | tail -n +2 >> {outpath}""")
+        for fastqc_metric, out_path in output.items():
+            title = fastqc_dict[fastqc_metric]["title"]
+            fields = fastqc_dict[fastqc_metric]["fields"]
+            for read_status, read_status_data in input.items():
+                sample_id_list = ["_".join(x) for x in itertools.product(["unmatched"]+list(SAMPLES.keys()), ["r1", "r2"])] if read_status=="raw" else ["_".join(x) for x in itertools.product(SAMPLES.keys(), ["r1", "r2"])]
+                for sample_id, fastqc_data in zip(sample_id_list, read_status_data):
+                    if sample_id in ["unmatched_r1", "unmatched_r2"] and title=="Adapter Content":
+                        shell("""awk 'BEGIN{{FS=OFS="\t"}} /{title}/{{flag=1;next}}/>>END_MODULE/{{flag=0}} flag {{m=$2;for(i=2;i<=NF-2;i++)if($i>m)m=$i; print $1, m, "{sample_id}", "{read_status}"}}' {fastqc_data} | tail -n +2 >> {out_path}""")
                     else:
-                        shell("""awk 'BEGIN{{FS=OFS="\t"}} /{stat}/{{flag=1;next}}/>>END_MODULE/{{flag=0}} flag {{print $0, "{sample_id}", "{input_type}"}}' {fqc} | tail -n +2 >> {outpath}""")
-            shell("""sed -i "1i {header}" {outpath}""")
+                        shell("""awk 'BEGIN{{FS=OFS="\t"}} /{title}/{{flag=1;next}}/>>END_MODULE/{{flag=0}} flag {{print $0, "{sample_id}", "{read_status}"}}' {fastqc_data} | tail -n +2 >> {out_path}""")
+            shell("""sed -i "1i {fields}" {out_path}""")
 
 rule plot_fastqc_summary:
     input:
-        seq_len_dist = 'qual_ctrl/fastqc/sequence_length_distribution.tsv',
-        per_tile = 'qual_ctrl/fastqc/per_tile_quality.tsv',
-        per_base_qual = 'qual_ctrl/fastqc/per_base_quality.tsv',
-        per_base_seq = 'qual_ctrl/fastqc/per_base_sequence_content.tsv',
-        per_base_n = 'qual_ctrl/fastqc/per_base_n.tsv',
-        per_seq_gc = 'qual_ctrl/fastqc/per_sequence_gc.tsv',
-        per_seq_qual = 'qual_ctrl/fastqc/per_sequence_quality.tsv',
-        adapter_content = 'qual_ctrl/fastqc/adapter_content.tsv',
-        seq_dup = 'qual_ctrl/fastqc/sequence_duplication_levels.tsv',
-        # kmer = 'qual_ctrl/fastqc/kmer_content.tsv'
+        per_base_qual = 'qual_ctrl/fastqc/mnase-seq-per_base_quality.tsv',
+        per_tile_qual = 'qual_ctrl/fastqc/mnase-seq-per_tile_quality.tsv',
+        per_seq_qual =  'qual_ctrl/fastqc/mnase-seq-per_sequence_quality.tsv',
+        per_base_seq_content = 'qual_ctrl/fastqc/mnase-seq-per_base_sequence_content.tsv',
+        per_seq_gc = 'qual_ctrl/fastqc/mnase-seq-per_sequence_gc.tsv',
+        per_base_n = 'qual_ctrl/fastqc/mnase-seq-per_base_n.tsv',
+        seq_length_dist = 'qual_ctrl/fastqc/mnase-seq-sequence_length_distribution.tsv',
+        seq_duplication = 'qual_ctrl/fastqc/mnase-seq-sequence_duplication_levels.tsv',
+        adapter_content = 'qual_ctrl/fastqc/mnase-seq-adapter_content.tsv',
     output:
-        seq_len_dist = 'qual_ctrl/fastqc/sequence_length_distribution.svg',
-        per_tile = 'qual_ctrl/fastqc/per_tile_quality.svg',
-        per_base_qual = 'qual_ctrl/fastqc/per_base_quality.svg',
-        per_base_seq = 'qual_ctrl/fastqc/per_base_sequence_content.svg',
-        per_seq_gc = 'qual_ctrl/fastqc/per_sequence_gc.svg',
-        per_seq_qual = 'qual_ctrl/fastqc/per_sequence_quality.svg',
-        adapter_content = 'qual_ctrl/fastqc/adapter_content.svg',
-        seq_dup = 'qual_ctrl/fastqc/sequence_duplication_levels.svg',
-        # kmer = 'qual_ctrl/fastqc/kmer_content.svg',
-    script: "scripts/fastqc_summary.R"
+        per_base_qual = 'qual_ctrl/fastqc/mnase-seq-per_base_quality.svg',
+        per_tile_qual = 'qual_ctrl/fastqc/mnase-seq-per_tile_quality.svg',
+        per_seq_qual =  'qual_ctrl/fastqc/mnase-seq-per_sequence_quality.svg',
+        per_base_seq_content = 'qual_ctrl/fastqc/mnase-seq-per_base_sequence_content.svg',
+        per_seq_gc = 'qual_ctrl/fastqc/mnase-seq-per_sequence_gc.svg',
+        seq_length_dist = 'qual_ctrl/fastqc/mnase-seq-sequence_length_distribution.svg',
+        seq_duplication = 'qual_ctrl/fastqc/mnase-seq-sequence_duplication_levels.svg',
+        adapter_content = 'qual_ctrl/fastqc/mnase-seq-adapter_content.svg',
+    script: "../scripts/fastqc_summary.R"
 

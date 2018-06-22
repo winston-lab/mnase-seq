@@ -2,7 +2,7 @@
 
 rule get_fragment_lengths:
     input:
-        expand("alignment/{sample}_{species}only.bam", sample=SAMPLES, species=config["combinedgenome"]["experimental_prefix"])
+        expand("alignment/{sample}_experimental.bam", sample=SAMPLES)
     params:
         header = "\t".join(["fragsize"] + list(SAMPLES.keys()))
     output:
@@ -10,19 +10,19 @@ rule get_fragment_lengths:
     threads: config["threads"]
     run:
         bam = input[0]
-        shell("""samtools view {bam} | cut -f9 | sed 's/-//g' | sort -k1,1n -S 50% --parallel {threads} | uniq -c | awk 'BEGIN{{OFS="\t"}}{{print $2, $1}}' > {output}""")
+        shell("""samtools view {bam} | cut -f9 | sed 's/-//g' | sort -k1,1n -S 80% --parallel {threads} | uniq -c | awk 'BEGIN{{OFS="\t"}}{{print $2, $1}}' > {output}""")
         for bam in input[1:]:
-            shell("""join -1 1 -2 2 -t $'\t' -e 0 -a 1 -a 2 {output} <(samtools view {bam} | cut -f9 | sed 's/-//g' | sort -k1,1n -S 50% --parallel {threads} | uniq -c | awk 'BEGIN{{OFS="\t"}}{{print $1, $2}}') > qual_ctrl/all/.frag_length.temp; mv qual_ctrl/all/.frag_length.temp {output}""")
+            shell("""join -1 1 -2 2 -t $'\t' -e 0 -a 1 -a 2 {output} <(samtools view {bam} | cut -f9 | sed 's/-//g' | sort -k1,1n -S 80% --parallel {threads} | uniq -c | awk 'BEGIN{{OFS="\t"}}{{print $1, $2}}') > qual_ctrl/all/.frag_length.temp; mv qual_ctrl/all/.frag_length.temp {output}""")
         shell("""sed -i "1i {params.header}" {output}""")
 
-#bam must be sorted by name for bedpe. We don't do this in the bowtie step since samtools index required position-sorted bam.
+#bam must be sorted by name for bedpe. We don't do this in the bowtie step since samtools indexing required position-sorted bam.
 rule get_fragments:
     input:
-        bam = "alignment/{sample}_{species}only.bam"
+        bam = "alignment/{sample}_{species}.bam"
     output:
-        "alignment/fragments/{sample}-{species}fragments.bedpe"
+        "alignment/fragments/{sample}_{species}-fragments.bedpe"
     threads: config["threads"]
-    log : "logs/get_fragments/get_fragments-{sample}-{species}.log"
+    log : "logs/get_fragments/get_fragments_{sample}-{species}.log"
     shell: """
         (samtools sort -n -T .{wildcards.sample}_{wildcards.species} -@ {threads} {input.bam} | bedtools bamtobed -bedpe -i stdin > {output}) &> {log}
         """

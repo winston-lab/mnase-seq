@@ -2,7 +2,7 @@
 
 rule read_processing_numbers:
     input:
-        adapter = expand("logs/cutadapt/cutadapt-{sample}.log", sample=SAMPLES),
+        adapter = expand("logs/clean_reads/clean_reads-{sample}.log", sample=SAMPLES),
         align = expand("logs/align/align-{sample}.log", sample=SAMPLES),
     output:
         "qual_ctrl/read_processing_summary.tsv"
@@ -20,21 +20,22 @@ rule plot_read_processing:
         surv_abs_out = "qual_ctrl/read_processing-survival-absolute.svg",
         surv_rel_out = "qual_ctrl/read_processing-survival-relative.svg",
         loss_out  = "qual_ctrl/read_processing-loss.svg",
-    script: "scripts/processing_summary.R"
+    script: "../scripts/processing_summary.R"
 
-rule get_si_pct:
+rule build_spikein_counts_table:
     input:
-        plmin = expand("coverage/counts/{sample}-mnase-midpoint-counts.bedgraph", sample=sisamples),
-        SIplmin = expand("coverage/sicounts/{sample}-mnase-midpoint-sicounts.bedgraph", sample=sisamples)
+        total_bam = expand("alignment/{sample}.bam", sample=sisamples),
+        exp_bam = expand("alignment/{sample}_experimental.bam", sample=sisamples),
+        si_bam = expand("alignment/{sample}_spikein.bam", sample=sisamples),
     params:
-        group = [v["group"] for k,v in sisamples.items()]
+        groups = [v["group"] for k,v in sisamples.items()]
     output:
         "qual_ctrl/all/spikein-counts.tsv"
     log: "logs/get_si_pct.log"
     run:
-        shell("rm -f {output}")
-        for name, exp, si, g in zip(sisamples.keys(), input.plmin, input.SIplmin, params.group):
-            shell("""(echo -e "{name}\t{g}\t" $(awk 'BEGIN{{FS=OFS="\t"; ex=0; si=0}}{{if(NR==FNR){{si+=$4}} else{{ex+=$4}}}} END{{print ex+si, ex, si}}' {si} {exp}) >> {output}) &> {log}""")
+        shell("""(echo -e "sample\tgroup\ttotal_fragments\texperimental_fragments\tspikein_fragments" > {output}) &> {log} """)
+        for sample, group, total_bam, exp_bam, si_bam in zip(sisamples.keys(), params.groups, input.total_bam, input.exp_bam, input.si_bam):
+            shell("""(paste <(echo -e "{sample}\t{group}") <(samtools view -c {total_bam}) <(samtools view -c {exp_bam}) <(samtools view -c {exp_bam}) >> {output}) &>> {log}""")
 
 rule plot_si_pct:
     input:
