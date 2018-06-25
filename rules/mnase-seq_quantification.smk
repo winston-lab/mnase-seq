@@ -2,7 +2,7 @@
 
 rule group_bam_for_danpos:
     input:
-        "alignment/{sample}_" + config["combinedgenome"]["experimental_prefix"] + "only.bam"
+        "alignment/{sample}_mnase-seq-experimental.bam"
     output:
         "nucleosome_calling/data/{group}/{sample}.bam"
     shell: """

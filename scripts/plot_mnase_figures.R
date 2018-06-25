@@ -553,7 +553,7 @@ main = function(in_paths, samplelist, anno_paths, ptype, readtype, upstream, dns
                       high = quantile(cpm, probs=(1-trim_pct)))
 
         metadf_group = df %>%
-            group_by(group, annotation, strand, position, cluster) %>%
+            group_by(group, annotation, position, cluster) %>%
             summarise(mid = median(cpm),
                       low = quantile(cpm, probs=trim_pct),
                       high = quantile(cpm, probs=(1-trim_pct)))
@@ -568,7 +568,7 @@ main = function(in_paths, samplelist, anno_paths, ptype, readtype, upstream, dns
     peakdf_sample = metadf_sample %>%
         group_by(group, sample, annotation, cluster, replicate) %>%
         do(tibble(position = .$position,
-                  fitted=loess(mean~position, data=., span=100/(upstream+dnstream))[["fitted"]])) %>%
+                  fitted=loess(mid~position, data=., span=100/(upstream+dnstream))[["fitted"]])) %>%
         slice(find_peaks(fitted, m=10) %>% as.integer())
 
     metadf_group %<>%
@@ -579,7 +579,7 @@ main = function(in_paths, samplelist, anno_paths, ptype, readtype, upstream, dns
     peakdf_group = metadf_group %>%
         group_by(group, annotation, cluster) %>%
         do(tibble(position = .$position,
-                  fitted=loess(mean~position, data=., span=100/(upstream+dnstream))[["fitted"]])) %>%
+                  fitted=loess(mid~position, data=., span=100/(upstream+dnstream))[["fitted"]])) %>%
         slice(find_peaks(fitted, m=10) %>% as.integer())
 
     meta_sample = meta(metadf_sample)
