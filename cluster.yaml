@@ -94,12 +94,7 @@ plot_depth:
     mem : 4000
 
 compute_matrix:
-    time : 15
-    n : 1
-    mem : 2000
-
-cat_matrices:
-    time : 30
+    time : 10
     mem : 2000
 
 plot_figures:

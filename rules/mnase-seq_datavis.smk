@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+localrules: cat_matrices
+
 rule compute_matrix:
     input:
         annotation = lambda wc: FIGURES[wc.figure]["annotations"][wc.annotation]["path"],
@@ -54,8 +56,8 @@ rule plot_figures:
         metahmap_group = "datavis/{figure}/{norm}/{condition}-v-{control}/{status}/{readtype}/mnase-seq_{figure}-{norm}-{status}_{condition}-v-{control}_{readtype}-metahmap-bygroup.svg",
     params:
         # abusing snakemake a bit here...using params as output paths since in order to use lambda functions
-        annotations_out = lambda wc: ["datavis/" + wc.figure + "/" + wc.norm + "/" + wc.condition + "-v-" + wc.control + "/" + wc.status + "/" + wc.readtype + "/" + annotation + "_cluster-" + str(cluster) + ".bed" for annotation in FIGURES[wc.figure]["annotations"] for cluster in range(1, FIGURES[wc.figure]["annotations"][annotation]["n_clusters"]+1)],
-        clusters_out = lambda wc: ["datavis/" + wc.figure + "/" + wc.norm + "/" + wc.condition + "-v-" + wc.control + "/" + wc.status + "/" + wc.readtype + "/" + annotation + ".pdf" for annotation in FIGURES[wc.figure]["annotations"]],
+        annotations_out = lambda wc: ["datavis/{figure}/{norm}/{condition}-v-{control}/{status}/{readtype}/".format(**wc) + annotation + "_cluster-" + str(cluster) + ".bed" for annotation in FIGURES[wc.figure]["annotations"] for cluster in range(1, FIGURES[wc.figure]["annotations"][annotation]["n_clusters"]+1)],
+        clusters_out = lambda wc: ["datavis/{figure}/{norm}/{condition}-v-{control}/{status}/{readtype}/".format(**wc) + annotation + ".pdf" for annotation in FIGURES[wc.figure]["annotations"]],
         samplelist = get_condition_control_samples,
         plottype = lambda wc: FIGURES[wc.figure]["parameters"]["type"],
         readtype = lambda wc: "dyad signal" if wc.readtype=="midpoint" else "protection",
@@ -63,6 +65,7 @@ rule plot_figures:
         dnstream = lambda wc: FIGURES[wc.figure]["parameters"]["dnstream"],
         scaled_length = lambda wc: 0 if FIGURES[wc.figure]["parameters"]["type"]=="absolute" else FIGURES[wc.figure]["parameters"]["scaled_length"],
         pct_cutoff = lambda wc: FIGURES[wc.figure]["parameters"]["pct_cutoff"],
+        spread_type = lambda wc: FIGURES[wc.figure]["parameters"]["spread_type"],
         trim_pct = lambda wc: FIGURES[wc.figure]["parameters"]["trim_pct"],
         refpointlabel = lambda wc: FIGURES[wc.figure]["parameters"]["refpointlabel"],
         endlabel = lambda wc:  "HAIL SATAN" if FIGURES[wc.figure]["parameters"]["type"]=="absolute" else FIGURES[wc.figure]["parameters"]["endlabel"],
@@ -74,5 +77,5 @@ rule plot_figures:
         cluster_three = lambda wc: [] if FIGURES[wc.figure]["parameters"]["arrange"] != "cluster" else FIGURES[wc.figure]["parameters"]["cluster_three"],
         k = lambda wc: [v["n_clusters"] for k,v in FIGURES[wc.figure]["annotations"].items()],
     script:
-        "scripts/plot_mnase_figures.R"
+        "../scripts/plot_mnase_figures.R"
 
