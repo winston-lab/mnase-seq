@@ -28,17 +28,17 @@ rule plot_read_processing:
 
 rule build_spikein_counts_table:
     input:
-        total_bam = expand("alignment/{sample}_mnase-seq.bam", sample=sisamples),
-        exp_bam = expand("alignment/{sample}_mnase-seq-experimental.bam", sample=sisamples),
-        si_bam = expand("alignment/{sample}_mnase-seq-spikein.bam", sample=sisamples),
+        total_bam = expand("alignment/{sample}_mnase-seq.bam", sample=SISAMPLES),
+        exp_bam = expand("alignment/{sample}_mnase-seq-experimental.bam", sample=SISAMPLES),
+        si_bam = expand("alignment/{sample}_mnase-seq-spikein.bam", sample=SISAMPLES),
     params:
-        groups = [v["group"] for k,v in sisamples.items()]
+        groups = [v["group"] for k,v in SISAMPLES.items()]
     output:
         "qual_ctrl/spikein/mnase-seq_spikein-counts.tsv"
     log: "logs/get_si_pct.log"
     run:
         shell("""(echo -e "sample\tgroup\ttotal_fragments\texperimental_fragments\tspikein_fragments" > {output}) &> {log} """)
-        for sample, group, total_bam, exp_bam, si_bam in zip(sisamples.keys(), params.groups, input.total_bam, input.exp_bam, input.si_bam):
+        for sample, group, total_bam, exp_bam, si_bam in zip(SISAMPLES.keys(), params.groups, input.total_bam, input.exp_bam, input.si_bam):
             shell("""(paste <(echo -e "{sample}\t{group}") <(samtools view -c {total_bam}) <(samtools view -c {exp_bam}) <(samtools view -c {si_bam}) >> {output}) &>> {log}""")
 
 rule plot_si_pct:
@@ -48,8 +48,8 @@ rule plot_si_pct:
         plot = "qual_ctrl/spikein/mnase-seq_spikein-plots-{status}.svg",
         stats = "qual_ctrl/spikein/mnase-seq_spikein-stats-{status}.tsv"
     params:
-        samplelist = lambda wc : sisamples if wc.status=="all" else sipassing,
-        conditions = conditiongroups_si if sisamples else [],
-        controls = controlgroups_si if sisamples else [],
+        samplelist = lambda wc : SISAMPLES if wc.status=="all" else SIPASSING,
+        conditions = conditiongroups_si if SISAMPLES else [],
+        controls = controlgroups_si if SISAMPLES else [],
     script: "../scripts/plotsipct.R"
 

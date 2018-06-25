@@ -1,35 +1,36 @@
 #!/usr/bin/env python
 
 rule map_to_windows:
-  input:
-      bg = "coverage/{norm}/{sample}-mnase-midpoint-{norm}.bedgraph",
-      chrsizes = config["genome"]["chrsizes"]
-  output:
-      temp("coverage/{norm}/{sample}_mnase-midpoint-window-{windowsize}-coverage-{norm}.bedgraph")
-  shell: """
-    bedtools makewindows -g {input.chrsizes} -w {wildcards.windowsize} | LC_COLLATE=C sort -k1,1 -k2,2n | bedtools map -a stdin -b {input.bg} -c 4 -o sum > {output}
-    """
+    input:
+        bg = "coverage/{norm}/{sample}_mnase-midpoint-{norm}.bedgraph",
+        chrsizes = config["genome"]["chrsizes"]
+    output:
+        temp("qual_ctrl/scatter_plots/mnase-seq_{sample}-{norm}-midpoint-window-{windowsize}.bedgraph")
+    log: "logs/map_to_windows/map_to_windows_{sample}_{norm}-{windowsize}.log"
+    shell: """
+        (bedtools makewindows -g {input.chrsizes} -w {wildcards.windowsize} | LC_COLLATE=C sort -k1,1 -k2,2n | bedtools map -a stdin -b {input.bg} -c 4 -o sum > {output}) &> {log}
+        """
 
 rule join_window_counts:
     input:
-        exp = expand("coverage/{{norm}}/{sample}_mnase-midpoint-window-{{windowsize}}-coverage-{{norm}}.bedgraph", sample=SAMPLES),
+        expand("qual_ctrl/scatter_plots/mnase-seq_{sample}-{{norm}}-midpoint-window-{{windowsize}}.bedgraph", sample=SAMPLES)
     output:
-        exp = "coverage/{norm}/union-bedgraph-window-{windowsize}-{norm}.tsv.gz",
+        "qual_ctrl/scatter_plots/mnase-seq_union-bedgraph-{norm}-midpoint-window-{windowsize}-allsamples.tsv.gz"
     params:
         names = list(SAMPLES.keys())
-    log: "logs/join_window_counts/join_window_counts-{windowsize}-{norm}.log"
+    log: "logs/join_window_counts/join_window_counts-{norm}-{windowsize}.log"
     shell: """
-        (bedtools unionbedg -i {input.exp} -header -names {params.names} | bash scripts/cleanUnionbedg.sh | pigz -f > {output.exp}) &> {log}
+        (bedtools unionbedg -i {input} -header -names {params.names} | bash scripts/cleanUnionbedg.sh | pigz -f > {output}) &> {log}
         """
 
-rule plotcorrelations:
+rule plot_scatter_plots:
     input:
-        "coverage/{norm}/union-bedgraph-window-{windowsize}-{norm}.tsv.gz"
+        "qual_ctrl/scatter_plots/mnase-seq_union-bedgraph-{norm}-midpoint-window-{windowsize}-allsamples.tsv.gz"
     output:
-        "qual_ctrl/{status}/{condition}-v-{control}/{condition}-v-{control}-mnase-{status}-window-{windowsize}-{norm}-correlations.svg"
+        "qual_ctrl/scatter_plots/{condition}-v-{control}/{status}/{condition}-v-{control}_mnase-seq-{norm}-scatterplots-{status}-window-{windowsize}.svg"
     params:
         pcount = lambda wc: 0.01*int(wc.windowsize),
-        samplelist = plotcorrsamples
+        samplelist = get_condition_control_samples
     script:
-        "scripts/plotcorr.R"
+        "../scripts/plot_scatter_plots.R"
 

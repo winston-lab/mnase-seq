@@ -3,7 +3,7 @@
 rule compute_matrix:
     input:
         annotation = lambda wc: FIGURES[wc.figure]["annotations"][wc.annotation]["path"],
-        bw = "coverage/{norm}/{sample}-mnase-{readtype}-{norm}.bw"
+        bw = "coverage/{norm}/{sample}_mnase-{readtype}-{norm}.bw"
     output:
         dtfile = temp("datavis/{figure}/{norm}/{annotation}_{sample}-{readtype}-{norm}.mat.gz"),
         matrix = temp("datavis/{figure}/{norm}/{annotation}_{sample}-{readtype}-{norm}.tsv"),
@@ -43,20 +43,20 @@ rule plot_figures:
         matrix = "datavis/{figure}/{norm}/{figure}-allsamples-allannotations-{readtype}-{norm}.tsv.gz",
         annotations = lambda wc: [v["path"] for k,v in FIGURES[wc.figure]["annotations"].items()]
     output:
-        heatmap_sample = "datavis/{figure}/{norm}/{condition}-v-{control}/{status}/{readtype}/mnase-{figure}-{norm}-{status}_{condition}-v-{control}_{readtype}-heatmap-bysample.svg",
-        heatmap_group = "datavis/{figure}/{norm}/{condition}-v-{control}/{status}/{readtype}/mnase-{figure}-{norm}-{status}_{condition}-v-{control}_{readtype}-heatmap-bygroup.svg",
-        meta_sample = "datavis/{figure}/{norm}/{condition}-v-{control}/{status}/{readtype}/mnase-{figure}-{norm}-{status}_{condition}-v-{control}_{readtype}-metagene-bysample.svg",
-        meta_sample_overlay = "datavis/{figure}/{norm}/{condition}-v-{control}/{status}/{readtype}/mnase-{figure}-{norm}-{status}_{condition}-v-{control}_{readtype}-metagene-bysample-overlay.svg",
-        meta_group = "datavis/{figure}/{norm}/{condition}-v-{control}/{status}/{readtype}/mnase-{figure}-{norm}-{status}_{condition}-v-{control}_{readtype}-metagene-bygroup.svg",
-        meta_sample_clust = "datavis/{figure}/{norm}/{condition}-v-{control}/{status}/{readtype}/mnase-{figure}-{norm}-{status}_{condition}-v-{control}_{readtype}-metagene-bycluster-sample.svg",
-        meta_group_clust = "datavis/{figure}/{norm}/{condition}-v-{control}/{status}/{readtype}/mnase-{figure}-{norm}-{status}_{condition}-v-{control}_{readtype}-metagene-bycluster-group.svg",
-        metahmap_sample = "datavis/{figure}/{norm}/{condition}-v-{control}/{status}/{readtype}/mnase-{figure}-{norm}-{status}_{condition}-v-{control}_{readtype}-metahmap-bysample.svg",
-        metahmap_group = "datavis/{figure}/{norm}/{condition}-v-{control}/{status}/{readtype}/mnase-{figure}-{norm}-{status}_{condition}-v-{control}_{readtype}-metahmap-bygroup.svg",
+        heatmap_sample = "datavis/{figure}/{norm}/{condition}-v-{control}/{status}/{readtype}/mnase-seq_{figure}-{norm}-{status}_{condition}-v-{control}_{readtype}-heatmap-bysample.svg",
+        heatmap_group = "datavis/{figure}/{norm}/{condition}-v-{control}/{status}/{readtype}/mnase-seq_{figure}-{norm}-{status}_{condition}-v-{control}_{readtype}-heatmap-bygroup.svg",
+        meta_sample = "datavis/{figure}/{norm}/{condition}-v-{control}/{status}/{readtype}/mnase-seq_{figure}-{norm}-{status}_{condition}-v-{control}_{readtype}-metagene-bysample.svg",
+        meta_sample_overlay = "datavis/{figure}/{norm}/{condition}-v-{control}/{status}/{readtype}/mnase-seq_{figure}-{norm}-{status}_{condition}-v-{control}_{readtype}-metagene-bysample-overlay.svg",
+        meta_group = "datavis/{figure}/{norm}/{condition}-v-{control}/{status}/{readtype}/mnase-seq_{figure}-{norm}-{status}_{condition}-v-{control}_{readtype}-metagene-bygroup.svg",
+        meta_sample_clust = "datavis/{figure}/{norm}/{condition}-v-{control}/{status}/{readtype}/mnase-seq_{figure}-{norm}-{status}_{condition}-v-{control}_{readtype}-metagene-bycluster-sample.svg",
+        meta_group_clust = "datavis/{figure}/{norm}/{condition}-v-{control}/{status}/{readtype}/mnase-seq_{figure}-{norm}-{status}_{condition}-v-{control}_{readtype}-metagene-bycluster-group.svg",
+        metahmap_sample = "datavis/{figure}/{norm}/{condition}-v-{control}/{status}/{readtype}/mnase-seq_{figure}-{norm}-{status}_{condition}-v-{control}_{readtype}-metahmap-bysample.svg",
+        metahmap_group = "datavis/{figure}/{norm}/{condition}-v-{control}/{status}/{readtype}/mnase-seq_{figure}-{norm}-{status}_{condition}-v-{control}_{readtype}-metahmap-bygroup.svg",
     params:
         # abusing snakemake a bit here...using params as output paths since in order to use lambda functions
         annotations_out = lambda wc: ["datavis/" + wc.figure + "/" + wc.norm + "/" + wc.condition + "-v-" + wc.control + "/" + wc.status + "/" + wc.readtype + "/" + annotation + "_cluster-" + str(cluster) + ".bed" for annotation in FIGURES[wc.figure]["annotations"] for cluster in range(1, FIGURES[wc.figure]["annotations"][annotation]["n_clusters"]+1)],
         clusters_out = lambda wc: ["datavis/" + wc.figure + "/" + wc.norm + "/" + wc.condition + "-v-" + wc.control + "/" + wc.status + "/" + wc.readtype + "/" + annotation + ".pdf" for annotation in FIGURES[wc.figure]["annotations"]],
-        samplelist = plotcorrsamples,
+        samplelist = get_condition_control_samples,
         plottype = lambda wc: FIGURES[wc.figure]["parameters"]["type"],
         readtype = lambda wc: "dyad signal" if wc.readtype=="midpoint" else "protection",
         upstream = lambda wc: FIGURES[wc.figure]["parameters"]["upstream"],

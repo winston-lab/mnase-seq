@@ -16,12 +16,12 @@ def danpos_norm(norm, condition, control, si_table):
         with open(si_table) as si_table:
             si_table = csv.reader(si_table, delimiter="\t")
             for row in si_table:
-                if row[0] in [k for k,v in sipassing.items() if v["group"]==condition]:
+                if row[0] in [k for k,v in SIPASSING.items() if v["group"]==condition]:
                     vals = [int(x) for x in row[2].split()]
                     #TODO: should really fix the sicounts file to be a proper tsv file...
                     cond_val += vals[2]/vals[0]
                     cond_count += 1
-                if row[0] in [k for k,v in sipassing.items() if v["group"]==control]:
+                if row[0] in [k for k,v in SIPASSING.items() if v["group"]==control]:
                     vals = [int(x) for x in row[2].split()]
                     ctrl_val += vals[2]/vals[0]
                     ctrl_count += 1
@@ -35,7 +35,7 @@ def danpos_norm(norm, condition, control, si_table):
 
 rule danpos:
     input:
-        bam = lambda wc: ["nucleosome_calling/data/" + PASSING[x]['group'] + "/" + x + ".bam" for x in PASSING] if wc.norm=="libsizenorm" else ["nucleosome_calling/data/" + sipassing[x]['group'] + "/" + x + ".bam" for x in sipassing],
+        bam = lambda wc: ["nucleosome_calling/data/" + PASSING[x]['group'] + "/" + x + ".bam" for x in PASSING] if wc.norm=="libsizenorm" else ["nucleosome_calling/data/" + SIPASSING[x]['group'] + "/" + x + ".bam" for x in SIPASSING],
         si_table = lambda wc: [] if wc.norm=="libsizenorm" else "qual_ctrl/all/spikein-counts.tsv"
     output:
         "nucleosome_calling/{condition}-v-{control}/{norm}/nucleosome_calling_data_{condition}-nucleosome_calling_data_{control}.positions.integrative.xls",

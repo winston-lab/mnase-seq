@@ -66,16 +66,16 @@ bedgraph_to_bigwig:
     mem: 2000
 
 map_to_windows:
-    time: 20
+    time: 7
     mem: 4000
 
 join_window_counts:
-    time: 15
+    time: 5
     mem: 4000
 
-plotcorrelations:
-    time : 60
-    mem : 12000
+plot_scatter_plots:
+    time : 10
+    mem : 6000
 
 nucwave:
     time : 120

@@ -2,7 +2,7 @@
 
 rule get_fragment_lengths:
     input:
-        expand("alignment/{sample}_mnase-seq-experimental.bam", sample=SAMPLES) if sisamples else expand("alignment/{sample}_mnase-seq.bam", sample=SAMPLES)
+        expand("alignment/{sample}_mnase-seq-experimental.bam", sample=SAMPLES) if SISAMPLES else expand("alignment/{sample}_mnase-seq.bam", sample=SAMPLES)
     params:
         header = "\t".join(["fragsize"] + list(SAMPLES.keys()))
     output:
@@ -18,7 +18,7 @@ rule get_fragment_lengths:
 #bam must be sorted by name for bedpe. We don't do this in the bowtie step since samtools indexing required position-sorted bam.
 rule get_fragments:
     input:
-        bam = "alignment/{sample}_mnase-seq-{species}.bam" if sisamples else "alignment/{sample}_mnase-seq.bam"
+        bam = "alignment/{sample}_mnase-seq-{species}.bam" if SISAMPLES else "alignment/{sample}_mnase-seq.bam"
     output:
         "alignment/fragments/{sample}_{species}-fragments.bedpe"
     threads: config["threads"]
@@ -40,7 +40,7 @@ rule midpoint_coverage:
 
 rule whole_fragment_coverage:
     input:
-        bam = lambda wc: f"alignment/{wc.sample}_mnase-seq-experimental.bam" if wc.counttype=="counts" and sisamples else f"alignment/{wc.sample}_mnase-seq.bam" if wc.counttype=="counts" else f"alignment/{wc.sample}_mnase-seq-spikein.bam",
+        bam = lambda wc: f"alignment/{wc.sample}_mnase-seq-experimental.bam" if wc.counttype=="counts" and SISAMPLES else f"alignment/{wc.sample}_mnase-seq.bam" if wc.counttype=="counts" else f"alignment/{wc.sample}_mnase-seq-spikein.bam",
     output:
         "coverage/{counttype}/{sample}_mnase-wholefrag-{counttype}.bedgraph"
     wildcard_constraints:
@@ -53,7 +53,7 @@ rule whole_fragment_coverage:
 rule normalize_genome_coverage:
     input:
         counts = "coverage/counts/{sample}_mnase-{readtype}-counts.bedgraph",
-        bam = lambda wc: f"alignment/{wc.sample}_mnase-seq-experimental.bam" if wc.norm=="libsizenorm" and sisamples else f"alignment/{wc.sample}_mnase-seq.bam" if wc.norm=="libsizenorm" else f"alignment/{wc.sample}_spikein.bam"
+        bam = lambda wc: f"alignment/{wc.sample}_mnase-seq-experimental.bam" if wc.norm=="libsizenorm" and SISAMPLES else f"alignment/{wc.sample}_mnase-seq.bam" if wc.norm=="libsizenorm" else f"alignment/{wc.sample}_spikein.bam"
     output:
         normalized = "coverage/{norm}/{sample}_mnase-{readtype}-{norm}.bedgraph"
     params:

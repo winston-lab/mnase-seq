@@ -6,7 +6,7 @@ localrules:
 
 rule bowtie_build:
     input:
-        fasta = config["combinedgenome"]["fasta"] if sisamples else config["genome"]["fasta"]
+        fasta = config["combinedgenome"]["fasta"] if SISAMPLES else config["genome"]["fasta"]
     output:
         expand(config["bowtie"]["index-path"] + "/{{basename}}.{num}.ebwt", num=[1,2,3,4]),
         expand(config["bowtie"]["index-path"] + "/{{basename}}.rev.{num}.ebwt", num=[1,2]),
@@ -22,8 +22,8 @@ rule bowtie_build:
 #in Christine's paper, Burak uses -m 10 --best
 rule align:
     input:
-        expand(config["bowtie"]["index-path"] + "/" + config["combinedgenome"]["name"] + ".{num}.ebwt", num=[1,2,3,4]) if sisamples else expand(config["bowtie"]["index-path"] + "/" + config["genome"]["name"] + ".{num}.ebwt", num=[1,2,3,4]),
-        expand(config["bowtie"]["index-path"] + "/" + config["combinedgenome"]["name"] + ".rev.{num}.ebwt", num=[1,2]) if sisamples else expand(config["bowtie"]["index-path"] + "/" + config["genome"]["name"] + ".rev.{num}.ebwt", num=[1,2]),
+        expand(config["bowtie"]["index-path"] + "/" + config["combinedgenome"]["name"] + ".{num}.ebwt", num=[1,2,3,4]) if SISAMPLES else expand(config["bowtie"]["index-path"] + "/" + config["genome"]["name"] + ".{num}.ebwt", num=[1,2,3,4]),
+        expand(config["bowtie"]["index-path"] + "/" + config["combinedgenome"]["name"] + ".rev.{num}.ebwt", num=[1,2]) if SISAMPLES else expand(config["bowtie"]["index-path"] + "/" + config["genome"]["name"] + ".rev.{num}.ebwt", num=[1,2]),
         r1 = "fastq/cleaned/{sample}-cleaned.r1.fastq.gz",
         r2 = "fastq/cleaned/{sample}-cleaned.r2.fastq.gz"
     output:
@@ -35,7 +35,7 @@ rule align:
         log = "logs/align/align-{sample}.log"
     params:
         idx_path = config["bowtie"]["index-path"],
-        basename = config["combinedgenome"]["name"] if sisamples else config["genome"]["name"],
+        basename = config["combinedgenome"]["name"] if SISAMPLES else config["genome"]["name"],
         max_mismatch = config["bowtie"]["max_mismatch"],
         min_ins = config["bowtie"]["min_ins"],
         max_ins = config["bowtie"]["max_ins"]
