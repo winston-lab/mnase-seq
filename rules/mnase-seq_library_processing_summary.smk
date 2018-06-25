@@ -1,11 +1,15 @@
 #!/usr/bin/env python
 
-rule read_processing_numbers:
+localrules:
+    build_read_processing_table,
+    plot_read_processing
+
+rule build_read_processing_table:
     input:
         adapter = expand("logs/clean_reads/clean_reads-{sample}.log", sample=SAMPLES),
         align = expand("logs/align/align-{sample}.log", sample=SAMPLES),
     output:
-        "qual_ctrl/read_processing/read_processing_summary.tsv"
+        "qual_ctrl/read_processing/mnase-seq_read_processing_summary.tsv"
     log: "logs/read_processing_summary.log"
     run:
         shell("""(echo -e "sample\traw\tcleaned\tmapped" > {output}) &> {log}""")
@@ -15,11 +19,11 @@ rule read_processing_numbers:
 
 rule plot_read_processing:
     input:
-        "qual_ctrl/read_processing/read_processing_summary.tsv"
+        "qual_ctrl/read_processing/mnase-seq_read_processing_summary.tsv"
     output:
-        surv_abs_out = "qual_ctrl/read_processing/read_processing-survival-absolute.svg",
-        surv_rel_out = "qual_ctrl/read_processing/read_processing-survival-relative.svg",
-        loss_out  = "qual_ctrl/read_processing/read_processing-loss.svg",
+        surv_abs_out = "qual_ctrl/read_processing/mnase-seq_read_processing-survival-absolute.svg",
+        surv_rel_out = "qual_ctrl/read_processing/mnase-seq_read_processing-survival-relative.svg",
+        loss_out  = "qual_ctrl/read_processing/mnase-seq_read_processing-loss.svg",
     script: "../scripts/processing_summary.R"
 
 rule build_spikein_counts_table:
@@ -35,7 +39,7 @@ rule build_spikein_counts_table:
     run:
         shell("""(echo -e "sample\tgroup\ttotal_fragments\texperimental_fragments\tspikein_fragments" > {output}) &> {log} """)
         for sample, group, total_bam, exp_bam, si_bam in zip(sisamples.keys(), params.groups, input.total_bam, input.exp_bam, input.si_bam):
-            shell("""(paste <(echo -e "{sample}\t{group}") <(samtools view -c {total_bam}) <(samtools view -c {exp_bam}) <(samtools view -c {exp_bam}) >> {output}) &>> {log}""")
+            shell("""(paste <(echo -e "{sample}\t{group}") <(samtools view -c {total_bam}) <(samtools view -c {exp_bam}) <(samtools view -c {si_bam}) >> {output}) &>> {log}""")
 
 rule plot_si_pct:
     input:
@@ -47,5 +51,5 @@ rule plot_si_pct:
         samplelist = lambda wc : sisamples if wc.status=="all" else sipassing,
         conditions = conditiongroups_si if sisamples else [],
         controls = controlgroups_si if sisamples else [],
-    script: "scripts/plotsipct.R"
+    script: "../scripts/plotsipct.R"
 
