@@ -51,5 +51,5 @@ rule plot_si_pct:
         samplelist = lambda wc : SISAMPLES if wc.status=="all" else SIPASSING,
         conditions = conditiongroups_si if SISAMPLES else [],
         controls = controlgroups_si if SISAMPLES else [],
-    script: "../scripts/plotsipct.R"
+    script: "../scripts/plot_si_pct.R"
 

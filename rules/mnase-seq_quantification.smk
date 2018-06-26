@@ -18,18 +18,20 @@ def danpos_norm(norm, condition, control, si_table):
             si_table = csv.reader(si_table, delimiter="\t")
             for row in si_table:
                 if row[0] in [k for k,v in SIPASSING.items() if v["group"]==condition]:
-                    vals = [int(x) for x in row[2].split()]
+                    # vals = [int(x) for x in row[2].split()]
                     #TODO: should really fix the sicounts file to be a proper tsv file...
-                    cond_val += vals[2]/vals[0]
+                    # cond_val += vals[2]/vals[0]
+                    cond_val += row[4]/row[2]
                     cond_count += 1
                 if row[0] in [k for k,v in SIPASSING.items() if v["group"]==control]:
-                    vals = [int(x) for x in row[2].split()]
-                    ctrl_val += vals[2]/vals[0]
+                    # vals = [int(x) for x in row[2].split()]
+                    # ctrl_val += vals[2]/vals[0]
+                    ctrl_val += row[4]/row[2]
                     ctrl_count += 1
         cond_sipct = cond_val/cond_count
         ctrl_sipct = ctrl_val/ctrl_count
         spikein_counts = int(1e7*ctrl_sipct*(1-cond_sipct)/((1-ctrl_sipct)*cond_sipct))
-        spikein_string = "--count nucleosome_calling/data/" + condition + "/:" + str(spikein_counts) + ",nucleosome_calling/data/" + control + "/:" + str(int(1e7))
+        spikein_string = f"--count nucleosome_calling/data/{condition}/:{spikein_counts},nucleosome_calling/data/{control}/:1e7"
         return spikein_string
     else:
         return ""
