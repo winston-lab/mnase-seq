@@ -53,7 +53,7 @@ rule whole_fragment_coverage:
 rule normalize_genome_coverage:
     input:
         counts = "coverage/counts/{sample}_mnase-{readtype}-counts.bedgraph",
-        bam = lambda wc: f"alignment/{wc.sample}_mnase-seq-experimental.bam" if wc.norm=="libsizenorm" and SISAMPLES else f"alignment/{wc.sample}_mnase-seq.bam" if wc.norm=="libsizenorm" else f"alignment/{wc.sample}_spikein.bam"
+        bam = lambda wc: f"alignment/{wc.sample}_mnase-seq-experimental.bam" if wc.norm=="libsizenorm" and SISAMPLES else f"alignment/{wc.sample}_mnase-seq.bam" if wc.norm=="libsizenorm" else f"alignment/{wc.sample}_mnase-seq-spikein.bam"
     output:
         normalized = "coverage/{norm}/{sample}_mnase-{readtype}-{norm}.bedgraph"
     params:
