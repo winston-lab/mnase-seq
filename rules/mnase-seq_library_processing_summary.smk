@@ -48,7 +48,7 @@ rule plot_si_pct:
         plot = "qual_ctrl/spikein/mnase-seq_spikein-plots-{status}.svg",
         stats = "qual_ctrl/spikein/mnase-seq_spikein-stats-{status}.tsv"
     params:
-        samplelist = lambda wc : SISAMPLES if wc.status=="all" else SIPASSING,
+        samplelist = lambda wc : list(SISAMPLES.keys()) if wc.status=="all" else list(SIPASSING.keys()),
         conditions = conditiongroups_si if SISAMPLES else [],
         controls = controlgroups_si if SISAMPLES else [],
     script: "../scripts/plot_si_pct.R"

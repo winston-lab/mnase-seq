@@ -6,7 +6,7 @@ library(ggthemes)
 main = function(in_path, sample_list, controls, conditions, plot_out, stats_out){
     df = read_tsv(in_path) %>%
         filter(sample %in% sample_list) %>%
-        mutate(si_pct = spikein_counts/total_counts*100) %>%
+        mutate(si_pct = spikein_fragments/total_fragments*100) %>%
         group_by(group) %>%
         mutate(outlier= ifelse(si_pct > 2.5*quantile(si_pct,.75) - 1.5*quantile(si_pct,.25) |
                                    si_pct< -2.5*quantile(si_pct,.25) - 1.5*quantile(si_pct,.75),
