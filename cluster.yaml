@@ -105,7 +105,7 @@ plot_figures:
 #     time : 20
 #     mem : 10000
 
-danpos:
+danpos_quantification:
     time: 60
     mem: 4000
 

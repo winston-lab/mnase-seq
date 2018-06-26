@@ -29,7 +29,7 @@ rule get_fragments:
 
 rule midpoint_coverage:
     input:
-        bedpe = lambda wc: f"alignment/fragments/{wc.sample}_experimental-fragments.bedpe" if wc.counttype=="counts" else "alignment/fragments/{wc.sample}_spikein-fragments.bedpe",
+        bedpe = lambda wc: f"alignment/fragments/{wc.sample}_experimental-fragments.bedpe" if wc.counttype=="counts" else f"alignment/fragments/{wc.sample}_spikein-fragments.bedpe",
         chrsizes = lambda wc: config["genome"]["chrsizes"] if wc.counttype=="counts" else config["genome"]["sichrsizes"]
     output:
         "coverage/{counttype,counts|sicounts}/{sample}_mnase-midpoint-{counttype}.bedgraph"

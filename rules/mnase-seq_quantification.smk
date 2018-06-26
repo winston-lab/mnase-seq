@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 
+#danpos has an unfriendly syntax for inputs, requires putting replicates into same directory
 rule group_bam_for_danpos:
     input:
         "alignment/{sample}_mnase-seq-experimental.bam"
     output:
-        "nucleosome_calling/data/{group}/{sample}.bam"
+        temp("nucleosome_calling/data/{group}/{sample}.bam")
     shell: """
         cp {input} {output}
         """
@@ -33,7 +34,7 @@ def danpos_norm(norm, condition, control, si_table):
     else:
         return ""
 
-rule danpos:
+rule danpos_quantification:
     input:
         bam = lambda wc: ["nucleosome_calling/data/" + PASSING[x]['group'] + "/" + x + ".bam" for x in PASSING] if wc.norm=="libsizenorm" else ["nucleosome_calling/data/" + SIPASSING[x]['group'] + "/" + x + ".bam" for x in SIPASSING],
         si_table = lambda wc: [] if wc.norm=="libsizenorm" else "qual_ctrl/all/spikein-counts.tsv"
@@ -52,8 +53,9 @@ rule danpos:
     conda:
         "envs/danpos.yaml"
     log: "logs/danpos/danpos-{condition}-v-{control}-{norm}.log"
-    shell:
-        """(python scripts/danpos-2.2.2/danpos.py dpos nucleosome_calling/data/{wildcards.condition}/:nucleosome_calling/data/{wildcards.control}/ {params.spikein_string} --paired 1 --edge 1 --span 1 -o nucleosome_calling/{wildcards.condition}-v-{wildcards.control}/{wildcards.norm}) &> {log}"""
+    shell: """
+        (python scripts/danpos-2.2.2/danpos.py dpos nucleosome_calling/data/{wildcards.condition}/:nucleosome_calling/data/{wildcards.control}/ {params.spikein_string} --paired 1 --edge 1 --span 1 -o nucleosome_calling/{wildcards.condition}-v-{wildcards.control}/{wildcards.norm}) &> {log}
+        """
 
 rule plot_danpos_results:
     input:
