@@ -3,7 +3,31 @@
 localrules:
     build_read_processing_table,
     plot_read_processing,
-    plot_spikein_pct
+    plot_spikein_pct,
+    plot_fragment_lengths
+
+rule get_fragment_lengths:
+    input:
+        expand("alignment/{sample}_mnase-seq-experimental.bam", sample=SAMPLES) if SISAMPLES else expand("alignment/{sample}_mnase-seq.bam", sample=SAMPLES)
+    output:
+        "qual_ctrl/fragment_length_distributions/mnase-seq_fragment_length_distributions.tsv"
+    params:
+        header = "\t".join(["fragsize"] + list(SAMPLES.keys()))
+    threads: config["threads"]
+    run:
+        bam = input[0]
+        shell("""samtools view {bam} | cut -f9 | sed 's/-//g' | sort -k1,1n -S 80% --parallel {threads} | uniq -c | awk 'BEGIN{{OFS="\t"}}{{print $2, $1}}' > {output}""")
+        for bam in input[1:]:
+            shell("""join -1 1 -2 2 -t $'\t' -e 0 -a 1 -a 2 {output} <(samtools view {bam} | cut -f9 | sed 's/-//g' | sort -k1,1n -S 80% --parallel {threads} | uniq -c | awk 'BEGIN{{OFS="\t"}}{{print $1, $2}}') > qual_ctrl/fragment_length_distributions/.frag_length.temp; mv qual_ctrl/fragment_length_distributions/.frag_length.temp {output}""")
+        shell("""sed -i "1i {params.header}" {output}""")
+
+rule plot_fragment_lengths:
+    input:
+        table = "qual_ctrl/fragment_length_distributions/mnase-seq_fragment_length_distributions.tsv"
+    output:
+        plot = "qual_ctrl/fragment_length_distributions/mnase-seq_fragment_length_distributions.svg"
+    script:
+        "../scripts/mnase_frag_length.R"
 
 rule build_read_processing_table:
     input:
