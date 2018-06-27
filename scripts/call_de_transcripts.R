@@ -7,7 +7,7 @@ library(gridExtra)
 library(ggrepel)
 
 get_countdata = function(path, samples){
-    df = read_tsv(path, col_names=TRUE) %>% select(c("name", samples)) %>% 
+    df = read_tsv(path, col_names=TRUE) %>% select(c("name", samples)) %>%
             column_to_rownames(var="name") %>% as.data.frame()
     df = df[rowSums(df)>1,]
     return(df)
@@ -29,8 +29,8 @@ mean_sd_plot = function(df, ymax){
 reverselog_trans <- function(base = exp(1)) {
     trans <- function(x) -log(x, base)
     inv <- function(x) base^(-x)
-    trans_new(paste0("reverselog-", format(base)), trans, inv, 
-              log_breaks(base = base), 
+    trans_new(paste0("reverselog-", format(base)), trans, inv,
+              log_breaks(base = base),
               domain = c(1e-100, Inf))
 }
 
@@ -45,16 +45,16 @@ call_de_bases = function(intable, norm, sitable, samples, groups, condition, con
                          results_all, results_up, results_down, results_unch,
                          bed_all, bed_up, bed_down, bed_unch,
                          normcounts, rldcounts, qcplots){
-    #import data 
+    #import data
     countdata = get_countdata(intable, samples)
     coldata = data.frame(condition=factor(groups,
                                           levels = c(control, condition)),
                          row.names=names(countdata))
-    #run DESeq2 
+    #run DESeq2
     dds = DESeqDataSetFromMatrix(countData = countdata,
                                  colData = coldata,
                                  design = ~ condition)
-    
+
     if (norm=="spikenorm"){
         sicountdata = get_countdata(sitable, samples)
         sidds = DESeqDataSetFromMatrix(countData = sicountdata,
@@ -66,15 +66,15 @@ call_de_bases = function(intable, norm, sitable, samples, groups, condition, con
         dds = dds %>% estimateSizeFactors()
     }
     dds = dds %>% estimateDispersions() %>% nbinomWaldTest()
-    
+
     #extract normalized counts and write to file
     ncounts = dds %>% counts(normalized=TRUE) %>% as.data.frame() %>%
         rownames_to_column(var='name') %>%
-        as_tibble() %>% 
-        separate_name() %>% 
+        as_tibble() %>%
+        separate_name() %>%
         mutate_if(is.numeric, round, 3) %>%
         write_tsv(path=normcounts, col_names=TRUE)
-    
+
     ncountsavg = ncounts %>%
         gather(sample, value, -c(transcript_id, chrom, strand, start, end)) %>%
         mutate(group = if_else(sample %in% samples[groups==condition], condition, control)) %>%
@@ -94,33 +94,33 @@ call_de_bases = function(intable, norm, sitable, samples, groups, condition, con
 
     #extract rlog transformed counts and write to file
     rlogcounts = dds %>% rlog(blind=FALSE) %>% assay() %>% as.data.frame() %>%
-        rownames_to_column(var="name") %>% as_tibble() %>% 
-        separate_name() %>% 
+        rownames_to_column(var="name") %>% as_tibble() %>%
+        separate_name() %>%
         mutate_if(is.numeric, round, 3) %>%
         write_tsv(path=rldcounts, col_names=TRUE)
-    
+
     #plot sd vs. mean for rlog transformed counts
     rld = rlogcounts %>%
         gather(sample, signal, -c(transcript_id, chrom, strand, start, end)) %>%
         group_by(transcript_id, chrom, strand, start, end) %>%
         summarise(mean=mean(signal), sd=sd(signal)) %>%
-        ungroup() %>% 
+        ungroup() %>%
         mutate(rank = min_rank(desc(mean)))
     rldplot = mean_sd_plot(rld, maxsd) +
                 ggtitle(expression(paste("regularized ", log[2]("counts"))))
 
     #extract DESeq2 results and write to file
     resdf = results(dds, alpha=alpha, lfcThreshold=lfc, altHypothesis="greaterAbs") %>%
-        as_tibble() %>% 
+        as_tibble() %>%
         rownames_to_column(var='name') %>%
-        separate_name() %>% 
-        arrange(padj) %>% 
+        separate_name() %>%
+        arrange(padj) %>%
         inner_join(ncountsavg, by=c('transcript_id', 'chrom', 'strand', 'start', 'end')) %>%
         mutate_at(c('pvalue','padj'), funs(-log10(.))) %>%
-        mutate_if(is.numeric, round, 3) %>% dplyr::rename(logpval=pvalue, logpadj=padj, meanExpr=baseMean) %>% 
+        mutate_if(is.numeric, round, 3) %>% dplyr::rename(logpval=pvalue, logpadj=padj, meanExpr=baseMean) %>%
         mutate_at(vars(start, end), funs(as.integer(.))) %>%
-        write_tsv(path=results_all, col_names=TRUE) 
-    
+        write_tsv(path=results_all, col_names=TRUE)
+
     #plot library size vs sizefactor
     sfdf = dds %>% sizeFactors() %>% as_tibble() %>%
         rownames_to_column(var="sample") %>% dplyr::rename(sizefactor=value) %>%
@@ -135,7 +135,7 @@ call_de_bases = function(intable, norm, sitable, samples, groups, condition, con
         ylab("size factor (median of ratios)") +
         theme_light() +
         theme(text = element_text(size=8))
-    
+
     #MA plot for differential expression
     resdf.sig = resdf %>% filter(logpadj> -log10(alpha))
     resdf.nonsig = resdf %>% filter(logpadj<= -log10(alpha))
@@ -149,7 +149,7 @@ call_de_bases = function(intable, norm, sitable, samples, groups, condition, con
         ylab(substitute(log[2]~frac(cond,cont), list(cond=condition, cont=control))) +
         theme_light() +
         theme(text = element_text(size=8))
-    
+
     volcano = ggplot() +
         geom_point(data = resdf.nonsig, aes(x=log2FoldChange, y = logpadj),
                    alpha=0.3, stroke=0, size=0.7) +
@@ -160,35 +160,35 @@ call_de_bases = function(intable, norm, sitable, samples, groups, condition, con
         ylab(expression(-log[10]("p value"))) +
         theme_light() +
         theme(text = element_text(size=8))
-    
+
     out = grid.arrange(sfplot, ggplot()+theme_void(),
                        ntdplot, rldplot,
                        maplot, volcano, ncol=2,
                        heights = unit(c(4, 6, 6), rep("cm",3)))
     ggsave(qcplots, out, height=18, width = 16, units="cm")
-    
-    
+
+
     #write out results and bed files for transcripts going up and down
-    resdf %>% unite(col="score", log2FoldChange, logpadj, sep=":") %>% 
-        select(chrom, start, end, transcript_id, score, strand) %>% 
+    resdf %>% unite(col="score", log2FoldChange, logpadj, sep=":") %>%
+        select(chrom, start, end, transcript_id, score, strand) %>%
         write_tsv(bed_all, col_names=FALSE)
 
-    resdf %>% filter(logpadj > -log10(alpha) & log2FoldChange > 0) %>% 
-        write_tsv(results_up) %>% 
-        unite(col="score", log2FoldChange, logpadj, sep=":") %>% 
-        select(chrom, start, end, transcript_id, score, strand) %>% 
+    resdf %>% filter(logpadj > -log10(alpha) & log2FoldChange > 0) %>%
+        write_tsv(results_up) %>%
+        unite(col="score", log2FoldChange, logpadj, sep=":") %>%
+        select(chrom, start, end, transcript_id, score, strand) %>%
         write_tsv(bed_up, col_names=FALSE)
-        
-    resdf %>% filter(logpadj > -log10(alpha) & log2FoldChange < 0) %>% 
-        write_tsv(results_down) %>% 
-        unite(col="score", log2FoldChange, logpadj, sep=":") %>% 
-        select(chrom, start, end, transcript_id, score, strand) %>% 
+
+    resdf %>% filter(logpadj > -log10(alpha) & log2FoldChange < 0) %>%
+        write_tsv(results_down) %>%
+        unite(col="score", log2FoldChange, logpadj, sep=":") %>%
+        select(chrom, start, end, transcript_id, score, strand) %>%
         write_tsv(bed_down, col_names=FALSE)
-    
-    resdf %>% filter(logpadj <= -log10(alpha)) %>% 
-        write_tsv(results_unch) %>% 
-        unite(col="score", log2FoldChange, logpadj, sep=":") %>% 
-        select(chrom, start, end, transcript_id, score, strand) %>% 
+
+    resdf %>% filter(logpadj <= -log10(alpha)) %>%
+        write_tsv(results_unch) %>%
+        unite(col="score", log2FoldChange, logpadj, sep=":") %>%
+        select(chrom, start, end, transcript_id, score, strand) %>%
         write_tsv(bed_unch, col_names=FALSE)
 }
 

@@ -77,21 +77,9 @@ plot_scatter_plots:
     time : 10
     mem : 6000
 
-nucwave:
-    time : 120
-    mem : 3000
-
-plot_fragsizes:
-    time : 60
-    mem : 4000
-
-get_perbase_depth:
-    time : 60
-    mem : 1000
-
-plot_depth:
-    time : 60
-    mem : 4000
+# plot_fragsizes:
+#     time : 60
+#     mem : 4000
 
 compute_matrix:
     time : 10
@@ -100,10 +88,6 @@ compute_matrix:
 plot_figures:
     time : 40
     mem : 10000
-
-# plot_metagenes:
-#     time : 20
-#     mem : 10000
 
 danpos_quantification:
     time: 60

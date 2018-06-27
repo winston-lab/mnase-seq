@@ -30,7 +30,7 @@ rule plot_scatter_plots:
         "qual_ctrl/scatter_plots/{condition}-v-{control}/{status}/{condition}-v-{control}_mnase-seq-{norm}-scatterplots-{status}-window-{windowsize}.svg"
     params:
         pcount = lambda wc: 0.01*int(wc.windowsize),
-        samplelist = get_condition_control_samples
+        samplelist = lambda wc: get_samples(wc.status, wc.norm, [wc.condition, wc.control])
     script:
         "../scripts/plot_scatter_plots.R"
 

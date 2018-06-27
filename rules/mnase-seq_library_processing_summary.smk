@@ -2,7 +2,8 @@
 
 localrules:
     build_read_processing_table,
-    plot_read_processing
+    plot_read_processing,
+    plot_spikein_pct
 
 rule build_read_processing_table:
     input:
@@ -35,13 +36,13 @@ rule build_spikein_counts_table:
         groups = [v["group"] for k,v in SISAMPLES.items()]
     output:
         "qual_ctrl/spikein/mnase-seq_spikein-counts.tsv"
-    log: "logs/get_si_pct.log"
+    log: "logs/build_spikein_counts_table.log"
     run:
         shell("""(echo -e "sample\tgroup\ttotal_fragments\texperimental_fragments\tspikein_fragments" > {output}) &> {log} """)
         for sample, group, total_bam, exp_bam, si_bam in zip(SISAMPLES.keys(), params.groups, input.total_bam, input.exp_bam, input.si_bam):
             shell("""(paste <(echo -e "{sample}\t{group}") <(samtools view -c {total_bam}) <(samtools view -c {exp_bam}) <(samtools view -c {si_bam}) >> {output}) &>> {log}""")
 
-rule plot_si_pct:
+rule plot_spikein_pct:
     input:
         "qual_ctrl/spikein/mnase-seq_spikein-counts.tsv"
     output:
