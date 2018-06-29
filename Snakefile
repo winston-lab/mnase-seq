@@ -61,10 +61,8 @@ rule all:
         #alignment
         expand("alignment/{sample}_mnase-seq.bam", sample=SAMPLES),
         #coverage
-        expand("coverage/counts/{sample}_mnase-{readtype}-counts.bw", sample=SAMPLES, readtype=["midpoint","wholefrag"]),
-        expand("coverage/sicounts/{sample}_mnase-{readtype}-sicounts.bw", sample=SISAMPLES, readtype=["midpoint","wholefrag"]),
-        expand("coverage/libsizenorm/{sample}_mnase-{readtype}-libsizenorm.bw", sample=SAMPLES, readtype=["midpoint","wholefrag"]),
-        expand("coverage/spikenorm/{sample}_mnase-{readtype}-spikenorm.bw", sample=SISAMPLES, readtype=["midpoint","wholefrag"]),
+        expand("coverage/{norm}/{sample}_mnase-{readtype}-{norm}.bw", sample=SAMPLES, norm=["counts", "libsizenorm"], readtype=["midpoint","wholefrag"]),
+        expand("coverage/{norm}/{sample}_mnase-{readtype}-{norm}.bw", sample=SISAMPLES, norm=["sicounts", "spikenorm"], readtype=["midpoint","wholefrag"]),
         expand("coverage/libsizenorm/{sample}_mnase-midpoint_smoothed-libsizenorm.bw", sample=SAMPLES),
         expand("coverage/spikenorm/{sample}_mnase-midpoint_smoothed-spikenorm.bw", sample=SISAMPLES),
         #quality controls
