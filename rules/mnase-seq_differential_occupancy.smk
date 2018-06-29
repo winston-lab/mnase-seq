@@ -9,7 +9,7 @@ rule map_counts_to_transcripts:
         bed = lambda wc: config["genome"]["transcripts"] if wc.species=="experimental" else config["genome"]["spikein-transcripts"],
         bg = lambda wc: f"coverage/counts/{wc.sample}_mnase-midpoint-counts.bedgraph" if wc.species=="experimental" else f"coverage/sicounts/{wc.sample}_mnase-midpoint-sicounts.bedgraph"
     output:
-        temp("diff_levels/{condition}-v-{control}/{sample}-{species}-counts-over-transcripts.tsv")
+        temp("diff_levels/{condition}-v-{control}/{sample}_{species}-counts-over-transcripts.tsv")
     log: "logs/map_counts_to_transcripts/map_counts_to_transcripts_{condition}-v-{control}_{sample}-{species}.log"
     shell: """
         (LC_COLLATE=C sort -k1,1 -k2,2n {input.bed} | bedtools map -a stdin -b {input.bg} -c 4 -o sum | awk 'BEGIN{{FS=OFS="\t"}}{{($6=="+") ? strand="plus" : strand="minus"; print $4"~"$1"-"strand"~"$2"~"$3, $7}}' &> {output}) &> {log}
@@ -17,7 +17,7 @@ rule map_counts_to_transcripts:
 
 rule combine_counts_over_transcripts:
     input:
-        lambda wc : ["diff_levels/{condition}-v-{control}/".format(**wc) + x + f"-{wc.species}-counts-over-transcripts.tsv" for x in get_samples("passing", "libsizenorm", [wc.control, wc.condition])]
+        lambda wc : ["diff_levels/{condition}-v-{control}/".format(**wc) + x + f"_{wc.species}-counts-over-transcripts.tsv" for x in get_samples("passing", "libsizenorm", [wc.control, wc.condition])]
     output:
         "diff_levels/{condition}-v-{control}/{condition}-v-{control}_{species}-allsample-counts-over-transcripts.tsv"
     params:
@@ -32,11 +32,6 @@ rule call_nuclevel_changes:
     input:
         expcounts = "diff_levels/{condition}-v-{control}/{condition}-v-{control}_experimental-allsample-counts-over-transcripts.tsv",
         sicounts = lambda wc: [] if wc.norm=="libsizenorm" else "diff_levels/{condition}-v-{control}/{condition}-v-{control}_spikein-allsample-counts-over-transcripts.tsv".format(**wc)
-    params:
-        samples = lambda wc : get_samples("passing", wc.norm, [wc.control, wc.condition]),
-        groups = lambda wc : [PASSING[x]["group"] for x in get_samples("passing", wc.norm, [wc.control, wc.condition])],
-        alpha = config["deseq"]["fdr"],
-        lfc = log2(config["deseq"]["fold-change-threshold"])
     output:
         results_all = "diff_levels/{condition}-v-{control}/{norm}/{condition}-v-{control}-mnase-seq-results-{norm}-all.tsv",
         results_up = "diff_levels/{condition}-v-{control}/{norm}/{condition}-v-{control}-mnase-seq-results-{norm}-up.tsv",
@@ -49,6 +44,11 @@ rule call_nuclevel_changes:
         normcounts = "diff_levels/{condition}-v-{control}/{norm}/{condition}-v-{control}-mnase-seq-counts-sfnorm-{norm}.tsv",
         rldcounts = "diff_levels/{condition}-v-{control}/{norm}/{condition}-v-{control}-mnase-seq-counts-rlog-{norm}.tsv",
         qcplots = "diff_levels/{condition}-v-{control}/{norm}/{condition}-v-{control}-mnase-seq-qcplots-{norm}.svg"
+    params:
+        samples = lambda wc : get_samples("passing", wc.norm, [wc.control, wc.condition]),
+        groups = lambda wc : [PASSING[x]["group"] for x in get_samples("passing", wc.norm, [wc.control, wc.condition])],
+        alpha = config["deseq"]["fdr"],
+        lfc = log2(config["deseq"]["fold-change-threshold"])
     script:
         "../scripts/call_de_transcripts.R"
 

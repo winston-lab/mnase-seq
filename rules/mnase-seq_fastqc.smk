@@ -37,7 +37,6 @@ rule fastqc_raw:
                     (unzip -p qual_ctrl/fastqc/raw/{params.fname}_fastqc.zip {params.fname}_fastqc/fastqc_data.txt > {output}) &>> {log}""")
 
 #fastqc for cleaned, aligned, and unaligned reads
-#do the two reads sequentially to avoid fastqc bugs and problems with protected files (writing to same directory)
 rule fastqc_processed:
     input:
         fastq = "fastq/{fqtype}/{sample}-{fqtype}.{readnumber}.fastq.gz",
