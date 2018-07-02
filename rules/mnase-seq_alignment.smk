@@ -12,8 +12,8 @@ rule bowtie_build:
         expand(config["bowtie"]["index-path"] + "/{{basename}}.rev.{num}.ebwt", num=[1,2]),
     params:
         idx_path = config["bowtie"]["index-path"],
-    log:
-        "logs/bowtie-build_{basename}.log"
+    conda: "../envs/bowtie.yaml"
+    log: "logs/bowtie-build_{basename}.log"
     shell: """
         (bowtie-build {input.fasta} {params.idx_path}/{wildcards.basename}) &> {log}
         """
@@ -39,6 +39,7 @@ rule align:
         max_mismatch = config["bowtie"]["max_mismatch"],
         min_ins = config["bowtie"]["min_ins"],
         max_ins = config["bowtie"]["max_ins"]
+    conda: "../envs/bowtie.yaml"
     threads: config["threads"]
     shell: """
         (bowtie -v {params.max_mismatch} -I {params.min_ins} -X {params.max_ins} --fr --nomaqround --best -S -p {threads} --al fastq/aligned/{wildcards.sample}-aligned.fastq --un fastq/unaligned/{wildcards.sample}-unaligned.fastq {params.idx_path}/{params.basename} -1 {input.r1} -2 {input.r2} | samtools view -buh -f 0x2 - | samtools sort -T .{wildcards.sample} -@ {threads} -o {output.bam} -) &> {output.log}

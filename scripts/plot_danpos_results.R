@@ -19,7 +19,7 @@ main = function(condition_label, control_label, in_table, shift_hist_out, occupa
                 fuzziness_volcano_out, occupancy_v_fuzziness_out, occupancy_violin_out, occupancy_freqpoly_out,
                 occupancy_ecdf_out, fuzziness_violin_out, fuzziness_freqpoly_out, fuzziness_ecdf_out){
     df = read_tsv(in_table, col_types = 'ciiiiiiiddddddddddddddd')
-    
+
     #histogram of distance between nucleosome dyads (condition-control)
     shift_hist = ggplot(data = df, aes(x=abs(treat_smt_loca-control_smt_loca))) +
         geom_histogram(binwidth=1, center=0, fill="#114477", color="black") +
@@ -28,12 +28,12 @@ main = function(condition_label, control_label, in_table, shift_hist_out, occupa
         theme_default +
         theme(axis.title.y = element_blank())
     ggsave(shift_hist_out, plot=shift_hist, width=16, height=8, units="cm")
-    
+
     #occupancy volcano plot
     occupancy_volcano = ggplot(data = df, aes(x=point_log2FC, y=-log10(point_diff_FDR))) +
         stat_bin_hex(geom="point", aes(color=log10(..count..), fill=log10(..count..)),
                      shape=16, stroke=0, binwidth=c(0.02, 0.02), alpha=0.6) +
-        scale_color_viridis(option="inferno", guide=FALSE) + 
+        scale_color_viridis(option="inferno", guide=FALSE) +
         scale_fill_viridis(option="inferno", guide=FALSE) +
         xlab(bquote(bold(log[2] ~ frac(occupancy ~ .(condition_label),
                                        occupancy ~ .(control_label))))) +
@@ -41,12 +41,12 @@ main = function(condition_label, control_label, in_table, shift_hist_out, occupa
         ggtitle(paste("nucleosome occupancy:", condition_label, "vs.", control_label)) +
         theme_default
     ggsave(occupancy_volcano_out, plot = occupancy_volcano, width=16, height=12, units="cm")
-    
+
     #fuzziness volcano plot
     fuzziness_volcano = ggplot(data = df, aes(x=fuzziness_log2FC, y=-log10(fuzziness_diff_FDR))) +
         stat_bin_hex(geom="point", aes(color=log10(..count..), fill=log10(..count..)),
                      shape=16, stroke=0, binwidth=c(0.02, 0.02), alpha=0.6) +
-        scale_color_viridis(option="inferno", guide=FALSE) + 
+        scale_color_viridis(option="inferno", guide=FALSE) +
         scale_fill_viridis(option="inferno", guide=FALSE) +
         xlab(bquote(bold(log[2] ~ frac(fuzziness ~ .(condition_label),
                                        fuzziness ~ .(control_label))))) +
@@ -55,14 +55,14 @@ main = function(condition_label, control_label, in_table, shift_hist_out, occupa
                 subtitle = expression(fuzziness %==% SD ~ of ~ distances ~ from ~ summit)) +
         theme_default
     ggsave(fuzziness_volcano_out, plot = fuzziness_volcano, width=16, height=12, units="cm")
-    
-    melted = df %>% select(control_smt_val, treat_smt_val, control_fuzziness_score, treat_fuzziness_score) %>% 
-        gather(condition, occupancy, -c(control_fuzziness_score, treat_fuzziness_score)) %>% 
-        mutate(condition = if_else(condition=="control_smt_val", control_label, condition_label)) %>% 
-        mutate(condition=fct_inorder(condition, ordered=TRUE)) %>% 
+
+    melted = df %>% select(control_smt_val, treat_smt_val, control_fuzziness_score, treat_fuzziness_score) %>%
+        gather(condition, occupancy, -c(control_fuzziness_score, treat_fuzziness_score)) %>%
+        mutate(condition = if_else(condition=="control_smt_val", control_label, condition_label)) %>%
+        mutate(condition=fct_inorder(condition, ordered=TRUE)) %>%
         transmute(condition=condition, occupancy=occupancy,
                   fuzziness = if_else(condition==control_label, control_fuzziness_score, treat_fuzziness_score))
-    
+
     #occupancy vs fuzziness
     occupancy_v_fuzziness = ggplot(data = melted, aes(x=occupancy, y=fuzziness)) +
         stat_bin_hex(geom="point", aes(color=log10(..count..)), binwidth=c(.1,.1), shape=16, stroke=0, alpha=0.6) +
@@ -74,7 +74,7 @@ main = function(condition_label, control_label, in_table, shift_hist_out, occupa
                 subtitle = expression(fuzziness %==% SD ~ of ~ distances ~ from ~ summit)) +
         theme_default
     ggsave(occupancy_v_fuzziness_out, plot=occupancy_v_fuzziness, width=16, height=16, units="cm")
-    
+
     #occupancy violin
     occupancy_violin = ggplot(data = melted, aes(x=condition, y=occupancy)) +
         geom_violin(bw=.01, draw_quantiles = .5, fill="#4477AA") +
@@ -83,7 +83,7 @@ main = function(condition_label, control_label, in_table, shift_hist_out, occupa
         theme_default +
         theme(axis.title.x = element_blank())
     ggsave(occupancy_violin_out, plot=occupancy_violin, width=12, height=10, units="cm")
-    
+
     #occupancy freqpoly
     occupancy_freqpoly = ggplot(data = melted, aes(x=occupancy, color=condition)) +
         geom_freqpoly(binwidth=.01, size=0.5) +
@@ -93,7 +93,7 @@ main = function(condition_label, control_label, in_table, shift_hist_out, occupa
         theme_default +
         theme(axis.title.y = element_blank())
     ggsave(occupancy_freqpoly_out, plot=occupancy_freqpoly, width=16, height=8, units="cm")
-    
+
     #occupancy eCDF
     occupancy_ecdf = ggplot(data = melted, aes(x=occupancy, color=condition)) +
         stat_ecdf(geom="step", size=0.5) +
@@ -108,7 +108,7 @@ main = function(condition_label, control_label, in_table, shift_hist_out, occupa
               legend.background = element_blank(),
               legend.key = element_blank())
     ggsave(occupancy_ecdf_out, occupancy_ecdf, width=12, height=8, units="cm")
-    
+
     #fuzziness violin
     fuzziness_violin = ggplot(data = melted, aes(x=condition, y=fuzziness)) +
         geom_violin(bw=.1, draw_quantiles = .5, fill="#4477AA") +
@@ -117,7 +117,7 @@ main = function(condition_label, control_label, in_table, shift_hist_out, occupa
         theme_default +
         theme(axis.title.x = element_blank())
     ggsave(fuzziness_violin_out, plot=fuzziness_violin, width=12, height=10, units="cm")
-    
+
     #fuzziness freqpoly
     fuzziness_freqpoly = ggplot(data = melted, aes(x=fuzziness, color=condition)) +
         geom_freqpoly(binwidth=.1, size=0.5) +
@@ -127,7 +127,7 @@ main = function(condition_label, control_label, in_table, shift_hist_out, occupa
         theme_default +
         theme(axis.title.y = element_blank())
     ggsave(fuzziness_freqpoly_out, plot=fuzziness_freqpoly, width=16, height=8, units="cm")
-    
+
     #fuzziness eCDF
     fuzziness_ecdf = ggplot(data = melted, aes(x=fuzziness, color=condition)) +
         stat_ecdf(geom="step", size=0.5) +

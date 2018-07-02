@@ -78,6 +78,7 @@ rule plot_danpos_results:
         fuzziness_violin = "nucleosome_quantification/{condition}-v-{control}/{norm}/{condition}-v-{control}_{norm}-fuzziness-violin.svg",
         fuzziness_freqpoly = "nucleosome_quantification/{condition}-v-{control}/{norm}/{condition}-v-{control}_{norm}-fuzziness-freqpoly.svg",
         fuzziness_ecdf = "nucleosome_quantification/{condition}-v-{control}/{norm}/{condition}-v-{control}_{norm}-fuzziness-ecdf.svg"
+    conda: "../envs/tidyverse.yaml"
     script:
         "../scripts/plot_danpos_results.R"
 
@@ -148,6 +149,7 @@ rule danpos_vis_over_annotations:
         upstream = lambda wc: QUANT[wc.figure]["upstream"],
         max_length = lambda wc: QUANT[wc.figure]["max_length"],
         trim_pct = lambda wc: QUANT[wc.figure]["trim_pct"],
+    conda: "../envs/tidyverse.yaml"
     script:
         "../scripts/mnase_quant_vis.R"
 

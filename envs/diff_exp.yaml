@@ -1,0 +1,13 @@
+name: diff_exp
+channels:
+    - conda-forge
+    - r
+    - bioconda
+dependencies:
+    - bioconductor-deseq2=1.18.1
+    - r-tidyverse=1.1.1
+    - r-viridis=0.5.1
+    - r-scales=0.5.0
+    - r-gridextra=2.3
+    - r-ggrepel=0.8.0
+

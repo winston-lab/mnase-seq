@@ -144,5 +144,6 @@ rule plot_fastqc_summary:
         seq_length_dist = 'qual_ctrl/fastqc/mnase-seq-sequence_length_distribution.svg',
         seq_duplication = 'qual_ctrl/fastqc/mnase-seq-sequence_duplication_levels.svg',
         adapter_content = 'qual_ctrl/fastqc/mnase-seq-adapter_content.svg',
+    conda: "../envs/tidyverse.yaml"
     script: "../scripts/fastqc_summary.R"
 

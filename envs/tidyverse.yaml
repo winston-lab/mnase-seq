@@ -1,0 +1,17 @@
+name: tidyverse
+channels:
+    - r
+    - bioconda
+    - conda-forge
+dependencies:
+    - r-tidyverse=1.2.1
+    - r-viridis=0.4.0
+    - r-ggthemes=3.4.0
+    - r-broom=0.4.3
+    - r-ggrepel=0.8.0
+    - r-ggpmisc=0.2.16
+    - r-ggally=1.3.2
+    - r-psych=1.7.8
+    - r-seriation=1.2_3
+    - r-gtable=0.2.0
+    - r-gridextra=2.3

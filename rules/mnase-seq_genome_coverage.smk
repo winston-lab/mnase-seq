@@ -68,6 +68,7 @@ rule smoothed_midpoint_coverage:
         "coverage/{norm}/{sample}_mnase-midpoint_smoothed-{norm}.bw"
     params:
         bandwidth = config["smooth_bandwidth"]
+    conda: "../envs/smooth_coverage.yaml"
     log: "logs/smoothed_midpoint_coverage/smoothed_midpoint_coverage_{sample}-{norm}.log"
     shell: """
         (python scripts/smooth_midpoint_coverage.py -b {params.bandwidth} -i {input} -o {output}) &> {log}

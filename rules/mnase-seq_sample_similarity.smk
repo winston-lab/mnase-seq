@@ -31,6 +31,7 @@ rule plot_scatter_plots:
     params:
         pcount = lambda wc: 0.01*int(wc.windowsize),
         samplelist = lambda wc: get_samples(wc.status, wc.norm, [wc.condition, wc.control])
+    conda: "../envs/tidyverse.yaml"
     script:
         "../scripts/plot_scatter_plots.R"
 

@@ -49,6 +49,7 @@ rule call_nuclevel_changes:
         groups = lambda wc : [PASSING[x]["group"] for x in get_samples("passing", wc.norm, [wc.control, wc.condition])],
         alpha = config["deseq"]["fdr"],
         lfc = log2(config["deseq"]["fold-change-threshold"])
+    envs: "../envs/diff_exp.yaml"
     script:
         "../scripts/call_de_transcripts.R"
 
