@@ -6,7 +6,7 @@ localrules:
 
 rule bowtie_build:
     input:
-        fasta = config["combinedgenome"]["fasta"] if SISAMPLES else config["genome"]["fasta"]
+        fasta = config["genome"]["fasta"] if not SISAMPLES else config["combinedgenome"]["fasta"]
     output:
         expand(config["bowtie"]["index-path"] + "/{{basename}}.{num}.ebwt", num=[1,2,3,4]),
         expand(config["bowtie"]["index-path"] + "/{{basename}}.rev.{num}.ebwt", num=[1,2]),
@@ -66,7 +66,7 @@ rule bam_separate_species:
     input:
         bam = "alignment/{sample}_mnase-seq.bam",
         bai = "alignment/{sample}_mnase-seq.bam.bai",
-        fasta = config["combinedgenome"]["fasta"]
+        fasta = [] if not SISAMPLES else config["combinedgenome"]["fasta"]
     output:
         "alignment/{sample}_mnase-seq-{species}.bam"
     params:

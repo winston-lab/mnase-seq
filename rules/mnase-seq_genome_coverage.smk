@@ -58,7 +58,7 @@ rule bedgraph_to_bigwig:
         "coverage/{norm}/{sample}_mnase-{readtype}-{norm}.bw"
     log : "logs/bedgraph_to_bigwig/bedgraph_to_bigwig_{sample}-{readtype}-{norm}.log"
     shell: """
-        (bedGraphToBigWig {input.bedgraph} <(faidx {input.fasta} -i {chromsizes}) {output}) &> {log}
+        (bedGraphToBigWig {input.bedgraph} <(faidx {input.fasta} -i chromsizes) {output}) &> {log}
         """
 
 rule smoothed_midpoint_coverage:
