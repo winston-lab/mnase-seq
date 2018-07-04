@@ -15,12 +15,12 @@ rule get_fragments:
 rule midpoint_coverage:
     input:
         bedpe = lambda wc: f"alignment/fragments/{wc.sample}_experimental-fragments.bedpe" if wc.counttype=="counts" else f"alignment/fragments/{wc.sample}_spikein-fragments.bedpe",
-        chrsizes = lambda wc: config["genome"]["chrsizes"] if wc.counttype=="counts" else config["genome"]["sichrsizes"]
+        fasta = lambda wc: config["genome"]["fasta"] if wc.counttype=="counts" else config["genome"]["spikein_fasta"]
     output:
         "coverage/{counttype,counts|sicounts}/{sample}_mnase-midpoint-{counttype}.bedgraph"
     log: "logs/midpoint_coverage/midpoint_coverage_{sample}-{counttype}.log"
     shell: """
-        (awk 'BEGIN{{FS=OFS="\t"}} {{width=$6-$2}} {{(width % 2 != 0)? (mid=(width+1)/2+$2) : ((rand()<0.5)? (mid=width/2+$2) : (mid=width/2+$2+1))}} {{print $1, mid, mid+1, $7}}' {input.bedpe} | sort -k1,1 -k2,2n | bedtools genomecov -i stdin -g {input.chrsizes} -bga | sort -k1,1 -k2,2n > {output}) &> {log}
+        (awk 'BEGIN{{FS=OFS="\t"}} {{width=$6-$2}} {{(width % 2 != 0)? (mid=(width+1)/2+$2) : ((rand()<0.5)? (mid=width/2+$2) : (mid=width/2+$2+1))}} {{print $1, mid, mid+1, $7}}' {input.bedpe} | sort -k1,1 -k2,2n | bedtools genomecov -i stdin -g <(faidx {input.fasta} -i chromsizes) -bga | sort -k1,1 -k2,2n > {output}) &> {log}
         """
 
 rule whole_fragment_coverage:
@@ -53,12 +53,12 @@ rule normalize_genome_coverage:
 rule bedgraph_to_bigwig:
     input:
         bedgraph = "coverage/{norm}/{sample}_mnase-{readtype}-{norm}.bedgraph",
-        chrsizes = lambda wc: config["genome"]["sichrsizes"] if wc.norm=="sicounts" else config["genome"]["chrsizes"]
+        fasta = lambda wc: config["genome"]["spikein_fasta"] if wc.norm=="sicounts" else config["genome"]["fasta"]
     output:
         "coverage/{norm}/{sample}_mnase-{readtype}-{norm}.bw"
     log : "logs/bedgraph_to_bigwig/bedgraph_to_bigwig_{sample}-{readtype}-{norm}.log"
     shell: """
-        (bedGraphToBigWig {input.bedgraph} {input.chrsizes} {output}) &> {log}
+        (bedGraphToBigWig {input.bedgraph} <(faidx {input.fasta} -i {chromsizes}) {output}) &> {log}
         """
 
 rule smoothed_midpoint_coverage:

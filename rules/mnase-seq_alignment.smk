@@ -66,7 +66,7 @@ rule bam_separate_species:
     input:
         bam = "alignment/{sample}_mnase-seq.bam",
         bai = "alignment/{sample}_mnase-seq.bam.bai",
-        chrsizes = config["combinedgenome"]["chrsizes"]
+        fasta = config["combinedgenome"]["fasta"]
     output:
         "alignment/{sample}_mnase-seq-{species}.bam"
     params:
@@ -75,6 +75,6 @@ rule bam_separate_species:
     log: "logs/bam_separate_species/bam_separate_species-{sample}-{species}.log"
     threads: config["threads"]
     shell: """
-        (samtools view -h {input.bam} $(grep {params.keep_prefix} {input.chrsizes} | awk 'BEGIN{{FS="\t"; ORS=" "}}{{print $1}}') | grep -v -e 'SN:{params.discard_prefix}' | sed 's/{params.keep_prefix}//g' | samtools view -bh -@ {threads} -o {output} -) &> {log}
+        (samtools view -h {input.bam} $(grep {params.keep_prefix} <(faidx {input.fasta} -i chromsizes) | awk 'BEGIN{{FS="\t"; ORS=" "}}{{print $1}}') | grep -v -e 'SN:{params.discard_prefix}' | sed 's/{params.keep_prefix}//g' | samtools view -bh -@ {threads} -o {output} -) &> {log}
         """
 

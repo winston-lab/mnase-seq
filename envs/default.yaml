@@ -12,17 +12,20 @@ dependencies:
     - snakemake=5.1.5
     - gawk=4.2.1
     - sed=4.4
-    - bc=1.06
     - pigz=2.3.4
     - cutadapt=1.16
     - samtools=1.7
     - pysam=0.14.1
+    - pyfaidx=0.5.4.1
     - bedtools=2.27.1
     - deeptools=2.5.3
     - meme=4.12.0
     - fastqc=0.11.7
     - r-argparse=1.0.4
     - r-tidyverse=1.1.1
+    - r-stringi=1.1.7
     - r-ggseqlogo=0.1
-    - svg2png
+    - r-svglite=1.2.1
+    - r-gdtools=0.1.6
+    - svg2png=4.1.1
 

@@ -88,7 +88,7 @@ rule danpos_over_annotations:
         indiv_control = "nucleosome_quantification/{condition}-v-{control}/{norm}/pooled/nucleosome_quantification_data_{control}.Fnor.smooth.positions.xls",
         integrated = "nucleosome_quantification/{condition}-v-{control}/{norm}/nucleosome_quantification_data_{condition}-nucleosome_quantification_data_{control}.positions.integrative.xls",
         annotation = lambda wc: QUANT[wc.figure]["annotations"][wc.annotation]["path"],
-        chrsizes = config["genome"]["chrsizes"]
+        fasta = config["genome"]["fasta"]
     output:
         individual = temp("nucleosome_quantification/regions/{figure}/{norm}/{condition}-v-{control}/{figure}_{annotation}_{norm}-individual.tsv"),
         integrated = temp("nucleosome_quantification/regions/{figure}/{norm}/{condition}-v-{control}/{figure}_{annotation}_{norm}-integrated.tsv")
@@ -98,9 +98,9 @@ rule danpos_over_annotations:
         label = lambda wc: QUANT[wc.figure]["annotations"][wc.annotation]["label"]
     log: "logs/danpos_over_annotations/danpos_over_annotations_{condition}-v-{control}_{figure}-{annotation}-{norm}.log"
     shell: """
-        (bedtools slop -i {input.annotation} -g {input.chrsizes} -l {params.upstream} -r {params.dnstream} -s | bedtools intersect -a stdin -b <(awk 'BEGIN{{FS=OFS="\t"}} NR>1 && $2>0' {input.indiv_control}) -wo | awk 'BEGIN{{FS=OFS="\t"}}{{print $0, "{wildcards.control}", "{params.label}"}}' | \
-        cat - <(bedtools slop -i {input.annotation} -g {input.chrsizes} -l {params.upstream} -r {params.dnstream} -s | bedtools intersect -a stdin -b <(awk 'BEGIN{{FS=OFS="\t"}} NR>1 && $2>0' {input.indiv_condition}) -wo | awk 'BEGIN{{FS=OFS="\t"}}{{print $0, "{wildcards.condition}", "{params.label}"}}') > {output.individual}) &> {log}
-        (bedtools slop -i {input.annotation} -g {input.chrsizes} -l {params.upstream} -r {params.dnstream} -s | bedtools intersect -a stdin -b <(awk 'BEGIN{{FS=OFS="\t"}} NR>1 && $2>0' {input.integrated}) -wo | awk 'BEGIN{{FS=OFS="\t"}}{{print $0, "{params.label}"}}'> {output.integrated}) &>> {log}
+        (bedtools slop -i {input.annotation} -g <(faidx {input.fasta} -i chromsizes) -l {params.upstream} -r {params.dnstream} -s | bedtools intersect -a stdin -b <(awk 'BEGIN{{FS=OFS="\t"}} NR>1 && $2>0' {input.indiv_control}) -wo | awk 'BEGIN{{FS=OFS="\t"}}{{print $0, "{wildcards.control}", "{params.label}"}}' | \
+        cat - <(bedtools slop -i {input.annotation} -g <(faidx {input.fasta} -i chromsizes) -l {params.upstream} -r {params.dnstream} -s | bedtools intersect -a stdin -b <(awk 'BEGIN{{FS=OFS="\t"}} NR>1 && $2>0' {input.indiv_condition}) -wo | awk 'BEGIN{{FS=OFS="\t"}}{{print $0, "{wildcards.condition}", "{params.label}"}}') > {output.individual}) &> {log}
+        (bedtools slop -i {input.annotation} -g <(faidx {input.fasta} -i chromsizes) -l {params.upstream} -r {params.dnstream} -s | bedtools intersect -a stdin -b <(awk 'BEGIN{{FS=OFS="\t"}} NR>1 && $2>0' {input.integrated}) -wo | awk 'BEGIN{{FS=OFS="\t"}}{{print $0, "{params.label}"}}'> {output.integrated}) &>> {log}
         """
 
 rule cat_danpos_over_annotations:

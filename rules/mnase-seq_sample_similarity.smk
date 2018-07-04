@@ -3,12 +3,12 @@
 rule map_to_windows:
     input:
         bg = "coverage/{norm}/{sample}_mnase-midpoint-{norm}.bedgraph",
-        chrsizes = config["genome"]["chrsizes"]
+        fasta = config["genome"]["fasta"]
     output:
         temp("qual_ctrl/scatter_plots/mnase-seq_{sample}-{norm}-midpoint-window-{windowsize}.bedgraph")
     log: "logs/map_to_windows/map_to_windows_{sample}_{norm}-{windowsize}.log"
     shell: """
-        (bedtools makewindows -g {input.chrsizes} -w {wildcards.windowsize} | LC_COLLATE=C sort -k1,1 -k2,2n | bedtools map -a stdin -b {input.bg} -c 4 -o sum > {output}) &> {log}
+        (bedtools makewindows -g <(faidx {input.fasta} -i chromsizes) -w {wildcards.windowsize} | LC_COLLATE=C sort -k1,1 -k2,2n | bedtools map -a stdin -b {input.bg} -c 4 -o sum > {output}) &> {log}
         """
 
 rule join_window_counts:
