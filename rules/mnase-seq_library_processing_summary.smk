@@ -76,8 +76,8 @@ rule plot_spikein_pct:
         stats = "qual_ctrl/spikein/mnase-seq_spikein-stats-{status}.tsv"
     params:
         samplelist = lambda wc : list(SISAMPLES.keys()) if wc.status=="all" else list(SIPASSING.keys()),
-        conditions = conditiongroups_si if SISAMPLES else [],
-        controls = controlgroups_si if SISAMPLES else [],
+        conditions = conditiongroups_si if comparisons_si else [],
+        controls = controlgroups_si if comparisons_si else [],
     conda: "../envs/tidyverse.yaml"
     script: "../scripts/plot_si_pct.R"
 

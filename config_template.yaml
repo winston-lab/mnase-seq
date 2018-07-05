@@ -1,0 +1,181 @@
+# MNase-seq configuration file
+#
+# relative paths are okay
+#
+# provide paths to unassigned read1 and read2 fastq files (multiple files for each read are accepted)
+unmatched:
+    r1:
+      - ../demultiplex-mnase-fastq/fastq/unmodified/unmatched-unmodified.r1.fastq.gz
+    r2:
+      - ../demultiplex-mnase-fastq/fastq/unmodified/unmatched-unmodified.r2.fastq.gz
+
+# for the combined experimental and spikein genomes
+# can be commented out if no samples have spikein
+combinedgenome :
+    name : ScSp # [STRING] used only to name the bowtie2 indices
+    fasta : ../genome/ScSp.R64.2-1.ASM294v2.fa # path to combined fasta file
+    experimental_prefix : Spom_ # prefix for experimental species
+    spikein_prefix : Scer_ # prefix for spikein species
+
+# for the experimental genome only, except for 'spikein_fasta'
+genome:
+    name : Sp # [STRING] used only to name the bowtie2 indices if no spikeins
+    fasta : ../genome/S_pombe.ASM294v2.fa # path to experimental fasta file
+    spikein_fasta: ../genome/S_cerevisiae.R64-2-1.fa # path to spikein fasta file, if any samples have spikein
+    transcripts : ../genome/annotations/S_pombe_alltranscripts-adjustedTSS.bed # path to BED6+ file of transcript annotations
+
+spikein-pct: 0 # [FLOAT] percent spike-in added, only used if any samples have spikein. This is only used to scale spike-in normalized coverage so it is on the same scale as library size normalized coverage files
+
+# sample metadata
+samples:
+    wt-1 : # [STRING] sample name. Do not use underscores ("_").
+        r1: ../demultiplex-mnase-fastq/fastq/wt-1.r1.fastq.gz # path to read 1 fastq file
+        r2: ../demultiplex-mnase-fastq/fastq/wt-1.r2.fastq.gz # path to read 2 fastq file
+        barcode : GCAGCCTC # [STRING] sample barcode
+        group : wt # [STRING] sample group tag. Do not use underscores ("_").
+        pass-qc : True # [True|False] Should this sample be used for peakcalling, and included in "passing" heatmaps, metagenes, scatter plots, etc? Leave True for initial pipeline run, and rerun pipeline with False if a sample fails quality controls.
+        spikein: False # [True|False] Does the sample have a spikein?
+    wt-2 :
+        r1: ../demultiplex-mnase-fastq/fastq/wt-2.r1.fastq.gz
+        r2: ../demultiplex-mnase-fastq/fastq/wt-2.r2.fastq.gz
+        barcode : TCGCGTAC
+        group : wt
+        pass-qc : True
+        spikein: False
+    wt-3  :
+        r1: ../demultiplex-mnase-fastq/fastq/wt-3.r1.fastq.gz
+        r2: ../demultiplex-mnase-fastq/fastq/wt-3.r2.fastq.gz
+        barcode : TATACCGT
+        group : wt
+        pass-qc : True
+        spikein: False
+    non-depleted-1 :
+        r1: ../demultiplex-mnase-fastq/fastq/non-depleted-1.r1.fastq.gz
+        r2: ../demultiplex-mnase-fastq/fastq/non-depleted-1.r2.fastq.gz
+        barcode : ATATAGGA
+        group : non-depleted
+        pass-qc : True
+        spikein: False
+    non-depleted-2 :
+        r1: ../demultiplex-mnase-fastq/fastq/non-depleted-2.r1.fastq.gz
+        r2: ../demultiplex-mnase-fastq/fastq/non-depleted-2.r2.fastq.gz
+        barcode : AACCGTGT
+        group : non-depleted
+        pass-qc : True
+        spikein: False
+    non-depleted-3 :
+        r1: ../demultiplex-mnase-fastq/fastq/non-depleted-3.r1.fastq.gz
+        r2: ../demultiplex-mnase-fastq/fastq/non-depleted-3.r2.fastq.gz
+        barcode : CTCTGTCT
+        group : non-depleted
+        pass-qc : True
+        spikein: False
+    depleted-1 :
+        r1: ../demultiplex-mnase-fastq/fastq/depleted-1.r1.fastq.gz
+        r2: ../demultiplex-mnase-fastq/fastq/depleted-1.r2.fastq.gz
+        barcode : CCATACAC
+        group : depleted
+        pass-qc : True
+        spikein: False
+    depleted-2 :
+        r1: ../demultiplex-mnase-fastq/fastq/depleted-2.r1.fastq.gz
+        r2: ../demultiplex-mnase-fastq/fastq/depleted-2.r2.fastq.gz
+        barcode : GTCTACAT
+        group : depleted
+        pass-qc : True
+        spikein: False
+    depleted-3 :
+        r1: ../demultiplex-mnase-fastq/fastq/depleted-3.r1.fastq.gz
+        r2: ../demultiplex-mnase-fastq/fastq/depleted-3.r2.fastq.gz
+        barcode : GAGTTAAC
+        group : depleted
+        pass-qc : True
+        spikein: False
+
+# comparisons to be made in differential occupancy,  data visualization, scatterplots, etc, etc.
+comparisons:
+    libsizenorm:
+        depleted: non-depleted
+        non-depleted: wt
+    spikenorm:
+        # depleted: non-depleted # It's okay to have no comparisons if no spikein normalized comparisons are to be made
+
+# [INT] binsizes for scatterplots
+scatterplot_binsizes:
+    - 10
+    - 25
+
+# cutadapt settings
+cutadapt:
+    qual_cutoff : 20 # [INT] quality cutoff for cutadapt 3' trimming
+
+# bowtie1 alignment settings
+bowtie:
+    index-path: ../genome/bowtie1_indexes # directory to create index files, if they don't already exist in that directory
+    max_mismatch : 2 # [INT in (0,3)] number of mismatches allowed in mapping.
+    min_ins : 100 # [INT] minimum expected insert size
+    max_ins : 200 # [INT] maximum expected insert distance
+
+# for smoothed coverage tracks
+smooth_bandwidth : 20 # [INT] bandwidth of Gaussian kernel used to smooth coverage
+
+# DESeq2 differential occupancy settings
+deseq:
+    fdr: 0.1 # [FLOAT in (0,1)] false discovery rate threshold
+    fold-change-threshold: 1 # [FLOAT] fold-change for hypothesis. Absolute fold-change, NOT log2(FC).
+
+# data visualization settings
+plot_figures: True # [True|False] plot heatmaps and metagenes?
+figures:
+    allcoding-TSS: # [STRING] name of figure. Do not include underscores ("_")
+        annotations:
+            coding-genes: # [STRING] name of region. Do not include underscores ("_"). More than one region can be plotted.
+                path : ../genome/annotations/S_pombe_codingtranscripts-adjustedTSS.bed # path to BED6 file of regions
+                label: coding genes # [STRING] label for region
+                n_clusters: 1 # [INT] number of clusters to separate region into. Leave 1 for no clustering. Basic k-means clustering is used.
+        parameters:
+            type: absolute # [absolute|scaled] Plot absolute distances, or scale all annotations to the same length. For MNase-seq you almost always want absolute distance
+            binsize : 5 # [INT] binsize to summarise data
+            binstat : mean # [mean|median|min|max|sum|std] operation used to summarise data
+            refpoint : TSS # [TSS|TES|center] reference point in region. TSS and TES correspond to the 5' and 3' ends, respectively.
+            refpointlabel : TSS # [STRING] label for reference point
+            upstream : 400 # [INT] nucleotides upstream of reference point to plot. Must be a multiple of the binsize.
+            dnstream : 1500 # [INT] maximum nucleotides downstream of reference point to plot. Must be a multiple of the binsize.
+            nan_afterend: True # [True|False] Should data after the end of the annotation be left out? Useful for length-sorted heatmaps.
+            pct_cutoff : .92 # [FLOAT in (0,1)] Percentile of the data to set as the maximum of the colorbar in heatmaps
+            spread_type: quantile # [conf_int|quantile] Plot 95% confidence interval of the mean, or quantiles of the data.
+            trim_pct : 0.1 # [FLOAT in (0,1)] For confidence intervals, this is the percent to winsorize before taking the mean. For quantiles, this is the lower quantile.
+            arrange: length  # [no|length|cluster] No: keep annotations in order of annotation file. Length: sort annotations in order of length before plotting. Cluster: try to plot annotations with similar data close to one another, using optimal leaf ordering of hierarchical clustering
+            # cluster_conditions: # if arrange: cluster, the conditions to be used for clustering
+            #     - non-depleted
+            #     - depleted
+            # cluster_five: -500 # [INT] 5' boundary of the data to be used for clustering, relative to the reference point.
+            # cluster_three: 500 # [INT] 3' boundary of the data to be used for clustering, relative to the reference point
+            heatmap_colormap: viridis  # [viridis|inferno|magma|plasma] colormap for heatmaps
+
+# settings for visualization of nucleosome quantification
+quantification:
+    allcoding-plusonenuc: # [STRING] name of figure. Do not include underscores ("_")
+        annotations:
+            all: # [STRING] name of region. Do not include underscores ("_"). More than one region can be plotted.
+                path: /n/groups/winston/jc459/spt5/genome/annotations/S_pombe_alltranscripts-plus-one-nuc-dyad.bed # path to BED6 file of regions
+                label: coding genes # [STRING] label for region
+        refpoint: TSS
+        refpointlabel: +1 dyad # [STRING] label for reference point
+        upstream: 500 # [INT] nucleotides upstream of reference point to plot.
+        dnstream: 0 # [INT] maximum nucleotides downstream of 3' end of annotation to plot.
+        max_length: 1500 # [INT] maximum nucleotides downstream of reference point to plot
+        arrange: length # [no|length] No: keep annotations in order of annotation file. Length: sort annotations in order of length before plotting.
+        binsize: 10 # [INT] number of bases to bin for metagenes
+        occupancy_cutoff_low: 0.1 # [FLOAT in (0,1)] lower percentile to cut off occupancy heatmap colorbars
+        occupancy_cutoff_high: 0.9 # [FLOAT in (0,1)] upper percentile to cut off occupancy heatmap colorbars
+        fuzziness_cutoff_low: 0.1 # [FLOAT in (0,1)] lower percentile to cut off fuzziness heatmap colorbars
+        fuzziness_cutoff_high: 0.9 # [FLOAT in (0,1)] upper percentile to cut off fuzziness heatmap colorbars
+        occupancy_lfc_limit: 1 # [FLOAT] fold-change cutoff for occupancy lfc heatmap colorbar
+        fuzziness_lfc_limit: 0.25 # [FLOAT] fold-change cutoff for fuzziness lfc heatmap colorbar
+        displacement_limit: 20 # [INT] cutoff for displacement heatmap colorbar
+        trim_pct: 0.1 # [FLOAT in (0,1)] percent of data to winsorize for metagenes
+
+# maximum number of threads to use if running locally
+threads: 4 #[INT]
+

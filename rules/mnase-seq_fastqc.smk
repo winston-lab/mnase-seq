@@ -22,14 +22,16 @@ rule fastqc_raw:
     output:
         "qual_ctrl/fastqc/raw/{sample}_{readnumber}_fastqc-data-raw.txt",
     params:
-        fname = lambda wc: re.split('.fq|.fastq', os.path.split(config["unmatched"][wc.readnumber])[1])[0] if wc.sample=="unmatched" else re.split('.fq|.fastq', os.path.split(SAMPLES[wc.sample][wc.readnumber])[1])[0]
+        fname = lambda wc: "allunmatched" if wc.sample=="unmatched" else re.split('.fq|.fastq', os.path.split(SAMPLES[wc.sample][wc.readnumber])[1])[0]
     threads : config["threads"]
     log : "logs/fastqc_raw/fastqc_raw-{sample}-{readnumber}.log"
     run:
         if wildcards.sample=="unmatched":
             shell("""(mkdir -p qual_ctrl/fastqc/raw) &> {log};
-                    (fastqc --adapters {input.adapters} --nogroup --noextract -t {threads} -o qual_ctrl/fastqc/raw {input.fastq}) &>> {log};
-                    (unzip -p qual_ctrl/fastqc/raw/{params.fname}_fastqc.zip {params.fname}_fastqc/fastqc_data.txt > {output}) &>> {log}""")
+                    (cat {input.fastq} > qual_ctrl/fastqc/raw/allunmatched.fastq.gz) &>> {log};
+                    (fastqc --adapters {input.adapters} --nogroup --noextract -t {threads} -o qual_ctrl/fastqc/raw qual_ctrl/fastqc/raw/allunmatched.fastq.gz) &>> {log};
+                    (unzip -p qual_ctrl/fastqc/raw/{params.fname}_fastqc.zip {params.fname}_fastqc/fastqc_data.txt > {output}) &>> {log}
+                    (rm qual_ctrl/fastqc/raw/allunmatched.fastq.gz) &>> {log}""")
         else:
             adapter = SAMPLES[wildcards.sample]["barcode"]+"T"
             shell("""(mkdir -p qual_ctrl/fastqc/raw) &> {log};
