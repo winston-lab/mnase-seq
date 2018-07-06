@@ -26,12 +26,12 @@ def danpos_norm(norm, condition, control, si_table):
                     # vals = [int(x) for x in row[2].split()]
                     #TODO: should really fix the sicounts file to be a proper tsv file...
                     # cond_val += vals[2]/vals[0]
-                    cond_val += row[4]/row[2]
+                    cond_val += float(row[4])/float(row[2])
                     cond_count += 1
                 if row[0] in [k for k,v in SIPASSING.items() if v["group"]==control]:
                     # vals = [int(x) for x in row[2].split()]
                     # ctrl_val += vals[2]/vals[0]
-                    ctrl_val += row[4]/row[2]
+                    ctrl_val += float(row[4])/float(row[2])
                     ctrl_count += 1
         cond_sipct = cond_val/cond_count
         ctrl_sipct = ctrl_val/ctrl_count
