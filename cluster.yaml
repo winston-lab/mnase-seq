@@ -74,8 +74,8 @@ join_window_counts:
     mem: 4000
 
 plot_scatter_plots:
-    time : 10
-    mem : 6000
+    time : 20
+    mem : 10000
 
 # plot_fragsizes:
 #     time : 60
