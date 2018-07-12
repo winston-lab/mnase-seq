@@ -54,7 +54,7 @@ git clone https://github.com/winston-lab/mnase-seq.git
 
 ```bash
 # navigate into the pipeline directory
-cd tss-seq
+cd mnase-seq
 
 # create the snakemake_default environment
 conda env create -v -f envs/default.yaml
