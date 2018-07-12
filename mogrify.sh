@@ -8,7 +8,6 @@
 #SBATCH -o mogrify.log
 #SBATCH -J mogrify-netseq
 
-source activate svg2png
 find . -name "*.svg" ! -path "*.git*" ! -path "*.snakemake*" ! -name "rulegraph.svg" ! -name "dag.svg" | while read svg; do
     png=$(echo $svg | sed -e 's/.svg$/.png/g')
     if [ -e $png ]; then
