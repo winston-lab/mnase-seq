@@ -17,7 +17,6 @@ conditiongroups = [k for k,v in config["comparisons"]["libsizenorm"].items()]
 
 comparisons_si = config["comparisons"]["spikenorm"]
 if comparisons_si:
-    import csv # for danpos2 normalization function
     controlgroups_si = [v for k,v in config["comparisons"]["spikenorm"].items()]
     conditiongroups_si = [k for k,v in config["comparisons"]["spikenorm"].items()]
 

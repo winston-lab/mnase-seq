@@ -15,32 +15,6 @@ rule group_bam_for_danpos:
         cp {input} {output}
         """
 
-# if using spikein normalization, set control to 10M reads and condition to 10M*(condition SI pct)/(control SI pct)
-def danpos_norm(norm, condition, control, si_table):
-    if norm=="spikenorm":
-        cond_count, ctrl_count, cond_val, ctrl_val = 0,0,0,0
-        with open(si_table) as si_table:
-            si_table = csv.reader(si_table, delimiter="\t")
-            for row in si_table:
-                if row[0] in [k for k,v in SIPASSING.items() if v["group"]==condition]:
-                    # vals = [int(x) for x in row[2].split()]
-                    #TODO: should really fix the sicounts file to be a proper tsv file...
-                    # cond_val += vals[2]/vals[0]
-                    cond_val += row[4]/row[2]
-                    cond_count += 1
-                if row[0] in [k for k,v in SIPASSING.items() if v["group"]==control]:
-                    # vals = [int(x) for x in row[2].split()]
-                    # ctrl_val += vals[2]/vals[0]
-                    ctrl_val += row[4]/row[2]
-                    ctrl_count += 1
-        cond_sipct = cond_val/cond_count
-        ctrl_sipct = ctrl_val/ctrl_count
-        spikein_counts = int(1e7*ctrl_sipct*(1-cond_sipct)/((1-ctrl_sipct)*cond_sipct))
-        spikein_string = f"--count nucleosome_quantification/data/{condition}/:{spikein_counts},nucleosome_quantification/data/{control}/:1e7"
-        return spikein_string
-    else:
-        return ""
-
 rule danpos_quantification:
     input:
         bam = lambda wc: ["nucleosome_quantification/data/" + PASSING[x]['group'] + "/" + x + ".bam" for x in PASSING] if wc.norm=="libsizenorm" else ["nucleosome_quantification/data/" + SIPASSING[x]['group'] + "/" + x + ".bam" for x in SIPASSING],
@@ -56,12 +30,13 @@ rule danpos_quantification:
         "nucleosome_quantification/{condition}-v-{control}/{norm}/pooled/nucleosome_quantification_data_{control}.Fnor.smooth.positions.xls",
         "nucleosome_quantification/{condition}-v-{control}/{norm}/pooled/nucleosome_quantification_data_{control}.Fnor.smooth.wig"
     params:
-        spikein_string = lambda wc: danpos_norm(wc.norm, wc.condition, wc.control, "qual_ctrl/spikein/mnase-seq_spikein-counts.tsv")
+        condition_samples = lambda wc: ",".join(get_samples("passing", "spikenorm", wc.condition)),
+        control_samples = lambda wc: ",".join(get_samples("passing", "spikenorm", wc.control)),
     conda:
         "../envs/danpos.yaml"
     log: "logs/danpos_quantification/danpos_quantification-{condition}-v-{control}-{norm}.log"
     shell: """
-        (python scripts/danpos-2.2.2/danpos.py dpos nucleosome_quantification/data/{wildcards.condition}/:nucleosome_quantification/data/{wildcards.control}/ {params.spikein_string} --paired 1 --edge 1 --span 1 -o nucleosome_quantification/{wildcards.condition}-v-{wildcards.control}/{wildcards.norm}) &> {log}
+        (python scripts/danpos-2.2.2/danpos.py dpos nucleosome_quantification/data/{wildcards.condition}/:nucleosome_quantification/data/{wildcards.control}/ $(python scripts/danpos_norm.py {wildcards.norm} {wildcards.condition} {wildcards.control} {params.condition_samples} {params.control_samples} {input.si_table}) --paired 1 --edge 1 --span 1 -o nucleosome_quantification/{wildcards.condition}-v-{wildcards.control}/{wildcards.norm}) &> {log}
         """
 
 rule plot_danpos_results:
