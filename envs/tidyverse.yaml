@@ -1,8 +1,13 @@
 name: tidyverse
 channels:
-    - r
-    - bioconda
     - conda-forge
+    - bioconda
+    - r
+    - https://repo.anaconda.com/pkgs/free/linux-64
+    - https://repo.anaconda.com/pkgs/free/noarch
+    - https://repo.anaconda.com/pkgs/pro/linux-64
+    - https://repo.anaconda.com/pkgs/pro/noarch
+    - nodefaults
 dependencies:
     - r-tidyverse=1.1.1
     - r-viridis=0.4.0

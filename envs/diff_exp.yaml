@@ -1,8 +1,13 @@
 name: diff_exp
 channels:
     - conda-forge
-    - r
     - bioconda
+    - r
+    - https://repo.anaconda.com/pkgs/free/linux-64
+    - https://repo.anaconda.com/pkgs/free/noarch
+    - https://repo.anaconda.com/pkgs/pro/linux-64
+    - https://repo.anaconda.com/pkgs/pro/noarch
+    - nodefaults
 dependencies:
     - bioconductor-deseq2=1.18.1
     - r-tidyverse=1.1.1
