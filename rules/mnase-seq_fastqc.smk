@@ -98,7 +98,7 @@ fastqc_dict = {
 
 rule fastqc_aggregate:
     input:
-        raw = expand("qual_ctrl/fastqc/raw/{sample}_{read}_fastqc-data-raw.txt", sample=["unmatched"] + list(SAMPLES.keys()), read=["r1", "r2"]),
+        raw = expand("qual_ctrl/fastqc/raw/{sample}_{read}_fastqc-data-raw.txt", sample=(["unmatched"]if config["unmatched"]["r1"] and config["unmatched"]["r2"] else []) + list(SAMPLES.keys()), read=["r1", "r2"]),
         cleaned = expand("qual_ctrl/fastqc/cleaned/{sample}_{read}_fastqc-data-cleaned.txt", sample=SAMPLES, read=["r1", "r2"]),
         aligned = expand("qual_ctrl/fastqc/aligned/{sample}_{read}_fastqc-data-aligned.txt", sample=SAMPLES, read=["r1", "r2"]),
         unaligned = expand("qual_ctrl/fastqc/unaligned/{sample}_{read}_fastqc-data-unaligned.txt", sample=SAMPLES, read=["r1", "r2"]),
@@ -118,7 +118,7 @@ rule fastqc_aggregate:
             title = fastqc_dict[fastqc_metric]["title"]
             fields = fastqc_dict[fastqc_metric]["fields"]
             for read_status, read_status_data in input.items():
-                sample_id_list = ["_".join(x) for x in itertools.product(["unmatched"]+list(SAMPLES.keys()), ["r1", "r2"])] if read_status=="raw" else ["_".join(x) for x in itertools.product(SAMPLES.keys(), ["r1", "r2"])]
+                sample_id_list = ["_".join(x) for x in itertools.product((["unmatched"]if config["unmatched"]["r1"] and config["unmatched"]["r2"] else []) + list(SAMPLES.keys()), ["r1", "r2"])] if read_status=="raw" else ["_".join(x) for x in itertools.product(SAMPLES.keys(), ["r1", "r2"])]
                 for sample_id, fastqc_data in zip(sample_id_list, read_status_data):
                     if sample_id in ["unmatched_r1", "unmatched_r2"] and title=="Adapter Content":
                         shell("""awk 'BEGIN{{FS=OFS="\t"}} /{title}/{{flag=1;next}}/>>END_MODULE/{{flag=0}} flag {{m=$2;for(i=2;i<=NF-2;i++)if($i>m)m=$i; print $1, m, "{sample_id}", "{read_status}"}}' {fastqc_data} | tail -n +2 >> {out_path}""")
