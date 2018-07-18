@@ -97,10 +97,10 @@ samples:
 # comparisons to be made in differential occupancy,  data visualization, scatterplots, etc, etc.
 comparisons:
     libsizenorm:
-        depleted: non-depleted
-        non-depleted: wt
+        - depleted: non-depleted
+        - non-depleted: wt
     spikenorm:
-        # depleted: non-depleted  # It's okay to have no comparisons if no spikein normalized comparisons are to be made
+        # - depleted: non-depleted  # It's okay to have no comparisons if no spikein normalized comparisons are to be made
 
 # [INT] binsizes for scatterplots
 scatterplot_binsizes:

@@ -12,13 +12,13 @@ SISAMPLES = {k:v for k,v in SAMPLES.items() if v["spikein"]}
 PASSING = {k:v for k,v in SAMPLES.items() if v["pass-qc"]}
 SIPASSING = {k:v for k,v in PASSING.items() if v["spikein"]}
 
-controlgroups = [v for k,v in config["comparisons"]["libsizenorm"].items()]
-conditiongroups = [k for k,v in config["comparisons"]["libsizenorm"].items()]
+controlgroups = list(itertools.chain(*[d.values() for d in config["comparisons"]["libsizenorm"]]))
+conditiongroups = list(itertools.chain(*[d.keys() for d in config["comparisons"]["libsizenorm"]]))
 
 comparisons_si = config["comparisons"]["spikenorm"]
 if comparisons_si:
-    controlgroups_si = [v for k,v in config["comparisons"]["spikenorm"].items()]
-    conditiongroups_si = [k for k,v in config["comparisons"]["spikenorm"].items()]
+    controlgroups_si = list(itertools.chain(*[d.values() for d in config["comparisons"]["spikenorm"]]))
+    conditiongroups_si = list(itertools.chain(*[d.keys() for d in config["comparisons"]["spikenorm"]]))
 
 FIGURES = config["figures"]
 QUANT = config["quantification"]
