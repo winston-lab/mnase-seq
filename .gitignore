@@ -9,13 +9,13 @@ nucleosome_quantification/
 diff_levels/
 qual_ctrl/
 datavis/
+scripts/danpos-2.2.2/*.pyc
 scripts/.snakemake*
 snakemake.err
 snakemake.log
 *.svg
 mogrify.log
 README.html
-
 config.yaml
 
 Rplots.pdf

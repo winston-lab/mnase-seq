@@ -19,8 +19,10 @@ dependencies:
     - pyfaidx=0.5.4.1
     - bedtools=2.27.1
     - deeptools=2.5.3
+    - ucsc-bedgraphtobigwig=332
     - meme=4.12.0
     - fastqc=0.11.7
+    - weblogo=2.8.2
     - r-argparse=1.0.4
     - r-tidyverse=1.1.1
     - r-stringi=1.1.7
