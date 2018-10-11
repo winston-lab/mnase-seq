@@ -28,7 +28,7 @@ An analysis pipeline for paired-end MNase-seq data with the following major step
 
 ### required files
 
-- Paired-end FASTQ files of MNase-seq libraries prepared as described in [our preprint](https://www.biorxiv.org/content/early/2018/06/15/347575). FASTQ files should be demultiplexed, with a separate file for read 1 and read2 and all 5' inline barcodes trimmed. A separate pipeline for demultiplexing paired-end FASTQ files with 5' inline barcodes can be found [here](https://github.com/winston-lab/demultiplex-paired-end). This pipeline has only been tested using Illumina sequencing data. 
+- Paired-end FASTQ files of MNase-seq libraries prepared as described in [our publication](https://doi.org/10.1016/j.molcel.2018.09.005). FASTQ files should be demultiplexed, with a separate file for read 1 and read2 and all 5' inline barcodes trimmed. A separate pipeline for demultiplexing paired-end FASTQ files with 5' inline barcodes can be found [here](https://github.com/winston-lab/demultiplex-paired-end). This pipeline has only been tested using Illumina sequencing data. 
 
 - FASTA files:
     - the 'experimental' genome
