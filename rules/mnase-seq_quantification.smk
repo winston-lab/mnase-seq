@@ -105,7 +105,7 @@ rule danpos_vis_over_annotations:
         integrated_occ_point_hmap = "nucleosome_quantification/regions/{figure}/{norm}/{condition}-v-{control}/{figure}_{condition}-v-{control}_{norm}-integrated-point-occupancy-heatmap.svg",
         integrated_fuzz_hmap = "nucleosome_quantification/regions/{figure}/{norm}/{condition}-v-{control}/{figure}_{condition}-v-{control}_{norm}-integrated-fuzziness-heatmap.svg",
         integrated_displacement_hmap = "nucleosome_quantification/regions/{figure}/{norm}/{condition}-v-{control}/{figure}_{condition}-v-{control}_{norm}-integrated-displacement-heatmap.svg",
-        integrated_displacement_segment_hmap = "nucleosome_quantification/regions/{norm}/{figure}/{condition}-v-{control}/{figure}_{condition}-v-{control}_{norm}-integrated-displacement-segment-heatmap.svg",
+        integrated_displacement_segment_hmap = "nucleosome_quantification/regions/{figure}/{norm}/{condition}-v-{control}/{figure}_{condition}-v-{control}_{norm}-integrated-displacement-segment-heatmap.svg",
         integrated_occ_summit_meta = "nucleosome_quantification/regions/{figure}/{norm}/{condition}-v-{control}/{figure}_{condition}-v-{control}_{norm}-integrated-summit-occupancy-metagene.svg",
         integrated_occ_point_meta = "nucleosome_quantification/regions/{figure}/{norm}/{condition}-v-{control}/{figure}_{condition}-v-{control}_{norm}-integrated-point-occupancy-metagene.svg",
         integrated_fuzz_meta = "nucleosome_quantification/regions/{figure}/{norm}/{condition}-v-{control}/{figure}_{condition}-v-{control}_{norm}-integrated-fuzziness-metagene.svg",
