@@ -15,7 +15,7 @@ rule get_fragments:
 rule midpoint_coverage:
     input:
         bedpe = lambda wc: f"alignment/fragments/{wc.sample}_experimental-fragments.bedpe" if wc.counttype=="counts" else f"alignment/fragments/{wc.sample}_spikein-fragments.bedpe",
-        fasta = lambda wc: config["genome"]["fasta"] if wc.counttype=="counts" else config["genome"]["spikein_fasta"]
+        fasta = lambda wc: config["genome"]["fasta"] if wc.counttype=="counts" else config["spike_in"]["fasta"]
     output:
         "coverage/{counttype,counts|sicounts}/{sample}_mnase-midpoint-{counttype}.bedgraph"
     log: "logs/midpoint_coverage/midpoint_coverage_{sample}-{counttype}.log"
@@ -42,7 +42,7 @@ rule normalize_genome_coverage:
     output:
         normalized = "coverage/{norm}/{sample}_mnase-{readtype}-{norm}.bedgraph"
     params:
-        scale_factor = lambda wc: config["spikein-pct"] if wc.norm=="spikenorm" else 1
+        scale_factor = lambda wc: config["spike_in"]["proportion"] if wc.norm=="spikenorm" else 1
     wildcard_constraints:
         norm="libsizenorm|spikenorm"
     log: "logs/normalize_genome_coverage/normalize_genome_coverage_{sample}-{norm}-{readtype}.log"
@@ -53,7 +53,7 @@ rule normalize_genome_coverage:
 rule bedgraph_to_bigwig:
     input:
         bedgraph = "coverage/{norm}/{sample}_mnase-{readtype}-{norm}.bedgraph",
-        fasta = lambda wc: config["genome"]["spikein_fasta"] if wc.norm=="sicounts" else config["genome"]["fasta"]
+        fasta = lambda wc: config["spike_in"]["fasta"] if wc.norm=="sicounts" else config["genome"]["fasta"]
     output:
         "coverage/{norm}/{sample}_mnase-{readtype}-{norm}.bw"
     log : "logs/bedgraph_to_bigwig/bedgraph_to_bigwig_{sample}-{readtype}-{norm}.log"

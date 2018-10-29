@@ -10,23 +10,14 @@ unmatched:
     r2:
         - ../demultiplex-mnase-fastq/fastq/unmodified/unmatched-unmodified.r2.fastq.gz
 
-# for the combined experimental and spikein genomes
-# can be commented out if no samples have spikein
-combinedgenome:
-    name: ScSp  # [STRING] used only to name the bowtie2 indices
-    fasta: ../genome/ScSp.R64.2-1.ASM294v2.fa  # path to combined fasta file
-    experimental_prefix: Spom_  # prefix for experimental species
-    spikein_prefix: Scer_  # prefix for spikein species
-
-# for the experimental genome only, except for 'spikein_fasta'
 genome:
-    name: Sp  # [STRING] used only to name the bowtie2 indices if no spikeins
-    fasta: ../genome/S_pombe.ASM294v2.fa  # path to experimental fasta file
-    spikein_fasta: ../genome/S_cerevisiae.R64-2-1.fa  # path to spikein fasta file, if any samples have spikein
-    transcripts: ../genome/annotations/S_pombe_alltranscripts-adjustedTSS.bed  # path to BED6+ file of transcript annotations
-    spikein_transcripts:  # path to BED6+ file of transcript annotations, if any samples have spikein
+    annotation_workflow: ../build-annotations-cerevisiae/
 
-spikein-pct: 0  # [FLOAT] percent spike-in added, only used if any samples have spikein. This is only used to scale spike-in normalized coverage so it is on the same scale as library size normalized coverage files
+spike_in:
+    name: Spom
+    proportion: 0.1
+    fasta: ../genomefiles_cerevisiae/S_pombe.ASM294v2.fa
+    transcript_annotation: ../genome/annotations/S_pombe_alltranscripts-adjustedTSS.bed
 
 # sample metadata
 samples:

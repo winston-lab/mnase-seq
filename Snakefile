@@ -7,6 +7,11 @@ from math import log2
 
 configfile: "config.yaml"
 
+subworkflow build_annotations:
+    workdir: config["genome"]["annotation_workflow"]
+
+configfile: build_annotations("config.yaml")
+
 SAMPLES = config["samples"]
 SISAMPLES = {k:v for k,v in SAMPLES.items() if v["spikein"]}
 PASSING = {k:v for k,v in SAMPLES.items() if v["pass-qc"]}
