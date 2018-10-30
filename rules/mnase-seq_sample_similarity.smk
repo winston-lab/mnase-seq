@@ -3,7 +3,7 @@
 rule map_to_windows:
     input:
         bg = "coverage/{norm}/{sample}_mnase-midpoint-{norm}.bedgraph",
-        fasta = config["genome"]["fasta"]
+        fasta = os.path.abspath(build_annotations(config["genome"]["fasta"]))
     output:
         temp("qual_ctrl/scatter_plots/mnase-seq_{sample}-{norm}-midpoint-window-{windowsize}.bedgraph")
     log: "logs/map_to_windows/map_to_windows_{sample}_{norm}-{windowsize}.log"

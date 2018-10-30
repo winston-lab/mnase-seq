@@ -6,7 +6,7 @@ localrules:
 
 rule map_counts_to_transcripts:
     input:
-        bed = lambda wc: config["genome"]["transcript_annotation"] if wc.species=="experimental" else config["spike_in"]["transcript_annotation"],
+        bed = lambda wc: os.path.abspath(build_annotations(config["genome"]["transcript_annotation"])) if wc.species=="experimental" else config["spike_in"]["transcript_annotation"],
         bg = lambda wc: f"coverage/counts/{wc.sample}_mnase-midpoint-counts.bedgraph" if wc.species=="experimental" else f"coverage/sicounts/{wc.sample}_mnase-midpoint-sicounts.bedgraph"
     output:
         temp("diff_levels/{condition}-v-{control}/{sample}_{species}-counts-over-transcripts.tsv")

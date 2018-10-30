@@ -63,7 +63,7 @@ rule danpos_over_annotations:
         indiv_control = "nucleosome_quantification/{condition}-v-{control}/{norm}/pooled/nucleosome_quantification_data_{control}.Fnor.smooth.positions.xls",
         integrated = "nucleosome_quantification/{condition}-v-{control}/{norm}/nucleosome_quantification_data_{condition}-nucleosome_quantification_data_{control}.positions.integrative.xls",
         annotation = lambda wc: QUANT[wc.figure]["annotations"][wc.annotation]["path"],
-        fasta = config["genome"]["fasta"]
+        fasta = os.path.abspath(build_annotations(config["genome"]["fasta"]))
     output:
         individual = temp("nucleosome_quantification/regions/{figure}/{norm}/{condition}-v-{control}/{figure}_{annotation}_{norm}-individual.tsv"),
         integrated = temp("nucleosome_quantification/regions/{figure}/{norm}/{condition}-v-{control}/{figure}_{annotation}_{norm}-integrated.tsv")

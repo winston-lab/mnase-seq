@@ -12,7 +12,7 @@ basename = "{exp_name}_{exp_fasta}_{si_name}_{si_fasta}".format(exp_name = confi
 
 rule build_combined_genome:
     input:
-        experimental = config["genome"]["fasta"],
+        experimental = os.path.abspath(build_annotations(config["genome"]["fasta"])),
         spikein = config["spike_in"]["fasta"] if SISAMPLES else []
     output:
         "{directory}/{bn}.fa".format(directory = os.path.split(config["genome"]["fasta"])[0], bn=basename),
@@ -27,7 +27,7 @@ rule build_combined_genome:
 
 rule bowtie_build:
     input:
-        "{directory}/{bn}.fa".format(directory = os.path.split(config["genome"]["fasta"])[0], bn=basename) if SISAMPLES else config["genome"]["fasta"],
+        "{directory}/{bn}.fa".format(directory = os.path.split(config["genome"]["fasta"])[0], bn=basename) if SISAMPLES else os.path.abspath(build_annotations(config["genome"]["fasta"])),
     output:
         expand(config["bowtie"]["index-path"] + "/{{basename}}.{num}.ebwt", num=[1,2,3,4]),
         expand(config["bowtie"]["index-path"] + "/{{basename}}.rev.{num}.ebwt", num=[1,2]),
