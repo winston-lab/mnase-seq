@@ -43,10 +43,10 @@ rule bowtie_build:
 #in Christine's paper, Burak uses -m 10 --best
 rule align:
     input:
-        expand("{directory}/{bn}.{num}.bt2", directory = config["bowtie"]["index-path"],
+        expand("{directory}/{bn}.{num}.ebwt", directory = config["bowtie"]["index-path"],
                                              bn = basename,
                                              num = [1,2,3,4]),
-        expand("{directory}/{bn}.rev.{num}.bt2", directory = config["bowtie"]["index-path"],
+        expand("{directory}/{bn}.rev.{num}.ebwt", directory = config["bowtie"]["index-path"],
                                              bn = basename,
                                              num = [1,2]),
         r1 = "fastq/cleaned/{sample}-cleaned.r1.fastq.gz",
