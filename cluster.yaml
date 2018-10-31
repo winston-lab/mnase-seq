@@ -8,18 +8,18 @@ __default__ :
     err : "logs/cluster/{rule}.{wildcards}.err"
 
 fastqc_raw:
-    time : 45
+    time : 10
     n : 2
     mem : 6000
 
 fastqc_processed:
-    time : 30
+    time : 4
     mem : 4000
 
 plot_fastqc_summary:
-    time: 15
+    time: 4
     n: 1
-    mem: 10000
+    mem: 8000
 
 clean_reads:
     time : 60
@@ -41,28 +41,28 @@ get_fragment_lengths:
     mem: 4000
 
 get_fragments:
-    time : 45
+    time : 20
     n : 2
     mem : 4000
 
 midpoint_coverage:
-    time : 60
+    time : 20
     mem : 2000
 
 whole_fragment_coverage:
-    time : 60
+    time : 6
     mem : 2000
 
 smoothed_midpoint_coverage:
-    time : 60
+    time : 3
     mem : 2000
 
 normalize_genome_coverage:
-    time: 10
+    time: 4
     mem: 2000
 
 bedgraph_to_bigwig:
-    time: 15
+    time: 2
     mem: 2000
 
 map_to_windows:
@@ -101,6 +101,7 @@ danpos_vis_over_annotations:
     time: 10
     mem: 10000
 
-call_de_transcripts:
+call_nuclevel_changes:
     time: 10
     mem: 10000
+
