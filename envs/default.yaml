@@ -9,7 +9,7 @@ channels:
     - nodefaults
 
 dependencies:
-    - snakemake=5.2.0
+    - snakemake=5.3.0
     - gawk=4.2.1
     - sed=4.4
     - pigz=2.3.4
