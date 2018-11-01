@@ -90,7 +90,7 @@ rule bam_separate_species:
     input:
         bam = "alignment/{sample}_mnase-seq.bam",
         bai = "alignment/{sample}_mnase-seq.bam.bai",
-        fasta = "{directory}/{bn}.fa".format(directory = os.path.split(config["genome"]["fasta"])[0], bn=basename) if SISAMPLES else [],
+        fasta = "{directory}/{bn}.fa".format(directory = os.path.split(build_annotations(config["genome"]["fasta"]))[0], bn=basename) if SISAMPLES else [],
     output:
         "alignment/{sample}_mnase-seq-{species}.bam"
     params:

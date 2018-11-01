@@ -62,7 +62,7 @@ normalize_genome_coverage:
     mem: 2000
 
 bedgraph_to_bigwig:
-    time: 2
+    time: 3
     mem: 2000
 
 map_to_windows:
