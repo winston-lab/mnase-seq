@@ -9,25 +9,25 @@ channels:
     - nodefaults
 
 dependencies:
-    - snakemake=5.3.0
-    - gawk=4.2.1
-    - sed=4.4
-    - pigz=2.3.4
-    - cutadapt=1.16
-    - samtools=1.7
-    - pysam=0.14.1
-    - pyfaidx=0.5.4.1
-    - bedtools=2.27.1
+    - snakemake=5.3.0=py36_1
+    - gawk=4.2.1=0
+    - sed=4.4=h6e7b4c1_1001
+    - pigz=2.3.4=0
+    - cutadapt=1.18=py36_0
+    - samtools=1.9=h8ee4bcc_1
+    - pysam=0.15.1=py36h0380709_0
+    - pyfaidx=0.5.5.2=py_0
+    - bedtools=2.27.1=he941832_2
     - deeptools=2.5.3
-    - ucsc-bedgraphtobigwig=332
-    - meme=4.12.0
-    - fastqc=0.11.7
-    - weblogo=2.8.2
+    - ucsc-bedgraphtobigwig=366=hdd26221_0
+    - meme=5.0.2=py36pl526h96dd833_5
+    - fastqc=0.11.8=0
+    - weblogo=3.6.0
     - r-argparse=1.0.4
-    - r-tidyverse=1.1.1
-    - r-stringi=1.1.7
+    - r-tidyverse=1.2.1
+    - r-stringi=1.2.4
     - r-ggseqlogo=0.1
     - r-svglite=1.2.1
-    - r-gdtools=0.1.6
+    - r-gdtools=0.1.7
     - svg2png=4.1.1
 
