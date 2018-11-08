@@ -22,6 +22,7 @@ dependencies:
     - ucsc-bedgraphtobigwig=366=hdd26221_0
     - meme=5.0.2=py36pl526h96dd833_5
     - fastqc=0.11.8=0
+    - defaults::openjdk=8.0.152
     - weblogo=3.6.0
     - r-argparse=1.0.4
     - r-tidyverse=1.2.1
