@@ -78,6 +78,8 @@ localrules: all
 
 rule all:
     input:
+        #require config file so that it gets archived
+        "config.yaml",
         #fastqc
         'qual_ctrl/fastqc/mnase-seq-per_base_quality.svg',
         #alignment
