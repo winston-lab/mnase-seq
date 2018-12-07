@@ -5,6 +5,6 @@ channels:
 
 dependencies:
     - bowtie=1.2.2
-    - samtools=1.8
+    - samtools=1.9
     - pigz=2.3.4
 

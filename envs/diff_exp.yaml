@@ -9,14 +9,14 @@ channels:
     - https://repo.anaconda.com/pkgs/pro/noarch
     - nodefaults
 dependencies:
-    - bioconductor-deseq2=1.18.1
-    - r-tidyverse=1.1.1
+    - bioconductor-deseq2=1.20.0
+    - r-tidyverse=1.2.1
     - r-viridis=0.5.1
-    - r-scales=0.5.0
+    - r-scales=1.0.0
     - r-gridextra=2.3
     - r-ggrepel=0.8.0
     - r-svglite=1.2.1
-    - r-gdtools=0.1.6
+    - r-gdtools=0.1.7
     - r-hexbin=1.27.2
-    - r-mgcv=1.8
+    - r-mgcv=1.8_24
 

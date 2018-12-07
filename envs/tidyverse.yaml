@@ -9,19 +9,19 @@ channels:
     - https://repo.anaconda.com/pkgs/pro/noarch
     - nodefaults
 dependencies:
-    - r-tidyverse=1.1.1
-    - r-viridis=0.4.0
-    - r-ggthemes=3.4.0
-    - r-broom=0.4.2
+    - r-tidyverse=1.2.1
+    - r-viridis=0.5.1
+    - r-ggthemes=4.0.1
+    - r-broom=0.5.0
     - r-ggrepel=0.8.0
-    - r-ggpmisc=0.2.16
-    - r-ggally=1.3.2
-    - r-psych=1.7.5
+    - r-ggpmisc=0.3.0
+    - r-ggally=1.4.0
+    - r-psych=1.8.4
     - r-seriation=1.2_3
     - r-gtable=0.2.0
-    - r-gridextra=2.2.1
+    - r-gridextra=2.3
     - r-svglite=1.2.1
-    - r-gdtools=0.1.6
-    - r-stringi=1.1.7
+    - r-gdtools=0.1.7
+    - r-stringi=1.2.4
     - r-hexbin=1.27.2
 
