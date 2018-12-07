@@ -1,8 +1,8 @@
 __default__ :
     queue : "short"
-    time : 60
+    time : 10
     n : 1
-    mem : 2000
+    mem : 200
     name : "{rule}.{wildcards}"
     log : "logs/cluster/{rule}.{wildcards}.log"
     err : "logs/cluster/{rule}.{wildcards}.err"
@@ -10,30 +10,31 @@ __default__ :
 fastqc_raw:
     time : 10
     n : 2
-    mem : 6000
+    mem : 200
 
 fastqc_processed:
     time : 4
-    mem : 4000
+    n : 2
+    mem : 200
 
 plot_fastqc_summary:
     time: 4
     n: 1
-    mem: 8000
+    mem: 400
 
 clean_reads:
-    time : 60
+    time : 15
     n : 4
-    mem : 4000
+    mem : 150
 
 align:
     time : 60
     n : 4
-    mem : 2000
+    mem : 1000
 
 bam_separate_species:
-    time: 15
-    mem: 2000
+    time: 2
+    mem: 1
 
 get_fragment_lengths:
     time: 60
@@ -46,32 +47,32 @@ get_fragments:
     mem : 4000
 
 midpoint_coverage:
-    time : 20
-    mem : 2000
+    time : 3
+    mem : 75
 
 whole_fragment_coverage:
-    time : 6
-    mem : 2000
+    time : 3
+    mem : 75
 
 smoothed_midpoint_coverage:
     time : 3
-    mem : 2000
+    mem : 75
 
 normalize_genome_coverage:
     time: 4
-    mem: 2000
+    mem: 50
 
 bedgraph_to_bigwig:
-    time: 3
-    mem: 2000
+    time: 2
+    mem: 2
 
 map_to_windows:
     time: 7
-    mem: 4000
+    mem: 100
 
 join_window_counts:
     time: 5
-    mem: 4000
+    mem: 100
 
 plot_scatter_plots:
     time : 20
@@ -83,7 +84,7 @@ plot_scatter_plots:
 
 compute_matrix:
     time : 10
-    mem : 2000
+    mem : 400
 
 plot_figures:
     time : 40
