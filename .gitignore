@@ -17,6 +17,7 @@ snakemake.log
 mogrify.log
 README.html
 config.yaml
+*.*.swp
 
 Rplots.pdf
 !fastq/.gitkeep
