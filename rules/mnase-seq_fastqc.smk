@@ -23,8 +23,10 @@ rule fastqc_raw:
         "qual_ctrl/fastqc/raw/{sample}_{readnumber}_fastqc-data-raw.txt",
     params:
         fname = lambda wc: f"allunmatched.{wc.readnumber}" if wc.sample=="unmatched" else re.split('.fq|.fastq', os.path.split(SAMPLES[wc.sample][wc.readnumber])[1])[0]
-    threads : config["threads"]
-    log : "logs/fastqc_raw/fastqc_raw-{sample}-{readnumber}.log"
+    threads:
+        config["threads"]
+    log:
+        "logs/fastqc_raw/fastqc_raw-{sample}-{readnumber}.log"
     run:
         if wildcards.sample=="unmatched":
             shell("""(mkdir -p qual_ctrl/fastqc/raw) &> {log};
@@ -47,10 +49,12 @@ rule fastqc_processed:
     params:
         fname = lambda wc: "{sample}-{fqtype}.{readnumber}".format(**wc),
         adapter= lambda wc: SAMPLES[wc.sample]["barcode"]+"T",
-    log: "logs/fastqc_processed/fastqc_processed-{sample}-{fqtype}-{readnumber}.log"
-    threads: config["threads"]
     wildcard_constraints:
         fqtype="cleaned|aligned|unaligned"
+    threads:
+        config["threads"]
+    log:
+        "logs/fastqc_processed/fastqc_processed-{sample}-{fqtype}-{readnumber}.log"
     shell: """
         (mkdir -p qual_ctrl/fastqc/{wildcards.fqtype}) &> {log};
         (fastqc --adapters <(echo -e "adapter\t{params.adapter}") --nogroup --noextract -t {threads} -o qual_ctrl/fastqc/{wildcards.fqtype} {input.fastq}) &>> {log};

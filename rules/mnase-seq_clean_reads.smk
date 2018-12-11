@@ -12,7 +12,10 @@ rule clean_reads:
         log = "logs/clean_reads/clean_reads-{sample}.log"
     params:
         qual_cutoff = config["cutadapt"]["qual_cutoff"],
-    threads: config["threads"]
+    conda:
+        "../envs/cutadapt.yaml"
+    threads:
+        config["threads"]
     shell: """
         (cutadapt --cores={threads} --nextseq-trim={params.qual_cutoff} --minimum-length=5 --output={output.r1} --paired-output={output.r2} {input.r1} {input.r2}) &> {output.log}
         """

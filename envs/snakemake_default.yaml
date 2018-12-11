@@ -2,18 +2,13 @@ name: snakemake_default
 channels:
     - bioconda
     - conda-forge
-    - https://repo.anaconda.com/pkgs/free/linux-64
-    - https://repo.anaconda.com/pkgs/free/noarch
-    - https://repo.anaconda.com/pkgs/pro/linux-64
-    - https://repo.anaconda.com/pkgs/pro/noarch
-    - nodefaults
 
 dependencies:
-    - snakemake=5.3.0=py36_1
-    - gawk=4.2.1=0
+    - snakemake=5.3.1=0
+    - gawk=4.2.1=h470a237_0
     - sed=4.4=h6e7b4c1_1001
-    - pigz=2.3.4=0
-    - cutadapt=1.18=py36_0
+    - pigz=2.4=h84994c4_0
+    - fastqc=0.11.8=0
     - samtools=1.9=h8ee4bcc_1
     - pysam=0.15.1=py36h0380709_0
     - pyfaidx=0.5.5.2=py_0
@@ -21,10 +16,10 @@ dependencies:
     - deeptools=2.5.3
     - ucsc-bedgraphtobigwig=366=hdd26221_0
     - meme=5.0.2=py36pl526h96dd833_5
-    - fastqc=0.11.8=0
     - defaults::openjdk=8.0.152
     - weblogo=3.6.0
-    - r-argparse=1.0.4
+    - libiconv=1.15
+    - r-argparse=1.1.1
     - r-tidyverse=1.2.1
     - r-stringi=1.2.4
     - r-ggseqlogo=0.1
