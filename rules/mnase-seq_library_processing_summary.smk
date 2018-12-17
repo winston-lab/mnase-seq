@@ -18,7 +18,7 @@ rule get_fragment_lengths:
         bam = input[0]
         shell("""samtools view {bam} | cut -f9 | sed 's/-//g' | sort -k1,1n -S 80% --parallel {threads} | uniq -c | awk 'BEGIN{{OFS="\t"}}{{print $2, $1}}' > {output}""")
         for bam in input[1:]:
-            shell("""join -1 1 -2 2 -t $'\t' -e 0 -a 1 -a 2 {output} <(samtools view {bam} | cut -f9 | sed 's/-//g' | sort -k1,1n -S 80% --parallel {threads} | uniq -c | awk 'BEGIN{{OFS="\t"}}{{print $1, $2}}') > qual_ctrl/fragment_length_distributions/.frag_length.temp; mv qual_ctrl/fragment_length_distributions/.frag_length.temp {output}""")
+            shell("""join -1 1 -2 2 -t $'\t' -e 0 -a 1 -a 2 --nocheck-order {output} <(samtools view {bam} | cut -f9 | sed 's/-//g' | sort -k1,1n -S 80% --parallel {threads} | uniq -c | awk 'BEGIN{{OFS="\t"}}{{print $1, $2}}') > qual_ctrl/fragment_length_distributions/.frag_length.temp; mv qual_ctrl/fragment_length_distributions/.frag_length.temp {output}""")
         shell("""sed -i "1i {params.header}" {output}""")
 
 rule plot_fragment_lengths:
