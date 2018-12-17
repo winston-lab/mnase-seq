@@ -6,7 +6,7 @@ main = function(in_table, out_path){
         gather(key=sample, value=count, -fragsize) %>%
         mutate(sample = fct_inorder(sample, ordered=TRUE)) %>%
         group_by(sample) %>%
-        mutate(density = count/sum(count))
+        mutate(density = count/sum(count, na.rm=TRUE))
 
     plot = ggplot(data = df, aes(x=fragsize, y=density)) +
         geom_area(fill="#114477", color="black") +
