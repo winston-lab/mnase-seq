@@ -33,7 +33,7 @@ align:
     mem : 1000
 
 bam_separate_species:
-    time: 2
+    time: 3
     mem: 50
 
 get_fragment_lengths:
@@ -48,11 +48,11 @@ get_fragments:
 
 midpoint_coverage:
     time : 3
-    mem : 75
+    mem : 100
 
 whole_fragment_coverage:
     time : 3
-    mem : 75
+    mem : 100
 
 smoothed_midpoint_coverage:
     time : 3
