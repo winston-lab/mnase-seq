@@ -34,7 +34,7 @@ align:
 
 bam_separate_species:
     time: 2
-    mem: 1
+    mem: 50
 
 get_fragment_lengths:
     time: 60

@@ -1,7 +1,6 @@
 library(tidyverse)
 library(GGally)
 library(viridis)
-library(forcats)
 
 main = function(intable, binsize, pcount, samplelist, outpath){
     df = intable %>% read_tsv() %>%
