@@ -33,8 +33,8 @@ align:
     mem : 1000
 
 bam_separate_species:
-    time: 3
-    mem: 50
+    time: 8
+    mem: 75
 
 get_fragment_lengths:
     time: 60
@@ -47,11 +47,11 @@ get_fragments:
     mem : 4000
 
 midpoint_coverage:
-    time : 3
+    time : 6
     mem : 100
 
 whole_fragment_coverage:
-    time : 3
+    time : 6
     mem : 100
 
 smoothed_midpoint_coverage:
@@ -64,7 +64,7 @@ normalize_genome_coverage:
 
 bedgraph_to_bigwig:
     time: 2
-    mem: 2
+    mem: 40
 
 map_to_windows:
     time: 7
