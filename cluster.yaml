@@ -47,11 +47,19 @@ get_fragments:
     mem : 4000
 
 midpoint_coverage:
+<<<<<<< HEAD
     time : 6
     mem : 100
 
 whole_fragment_coverage:
     time : 6
+=======
+    time : 4
+    mem : 100
+
+whole_fragment_coverage:
+    time : 4
+>>>>>>> c13cecc6ebb4727435a1301e0aff4f917f52e016
     mem : 100
 
 smoothed_midpoint_coverage:
