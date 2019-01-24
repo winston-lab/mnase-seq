@@ -18,6 +18,7 @@ mogrify.log
 README.html
 config.yaml
 *.*.swp
+.*.bam
 
 Rplots.pdf
 !fastq/.gitkeep
