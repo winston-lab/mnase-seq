@@ -47,7 +47,7 @@ get_fragments:
     mem : 4000
 
 midpoint_coverage:
-    time : 10
+    time : 20
     mem : 100
 
 whole_fragment_coverage:
