@@ -1,5 +1,4 @@
 library(tidyverse)
-library(forcats)
 library(gridExtra)
 library(ggthemes)
 
@@ -55,29 +54,36 @@ main = function(in_path, sample_list, controls, conditions, plot_out, stats_out)
                   sd_no_outlier = sd(si_pct)) %>%
         write_tsv(path = stats_out, col_names=TRUE)
 
-    rel_levels = tibble(condition=conditions, control=controls) %>%
-        left_join(si_stats %>% select(group, mean_no_outlier),
-                  by=c("condition"="group")) %>%
-        rename(condition_pct=mean_no_outlier) %>%
-        left_join(si_stats %>% select(group, mean_no_outlier),
-                  by=c("control"="group")) %>%
-        rename(control_pct=mean_no_outlier) %>%
-        mutate_at(vars(condition_pct, control_pct),
-                  funs(./100)) %>%
-        mutate(relative_levels = control_pct*(1-condition_pct)/(condition_pct*(1-control_pct)))
-
-    pct_table = rel_levels %>%
-        select(condition, control, relative_levels) %>%
-        mutate_at("relative_levels", funs(round(., digits=3)))
-    pct_draw = tableGrob(pct_table, rows=NULL, cols=c("condition","control","relative levels"),
-                        ttheme_minimal(base_size=10))
     #set width
     wl = 1+1.6*n_samples
     wr = 1+1.8*n_groups
-    th = 1+length(conditions)/2
-    page = arrangeGrob(barplot, boxplot, pct_draw, layout_matrix=rbind(c(1,2),c(3,3)),
-                       widths=unit(c(wl, wr), "cm"),
-                       heights=unit(c(9,th),"cm"))
+    th = 0
+    if (!(is.null(conditions) || is.null(controls))){
+        rel_levels = tibble(condition=conditions, control=controls) %>%
+            left_join(si_stats %>% select(group, mean_no_outlier),
+                      by=c("condition"="group")) %>%
+            rename(condition_pct=mean_no_outlier) %>%
+            left_join(si_stats %>% select(group, mean_no_outlier),
+                      by=c("control"="group")) %>%
+            rename(control_pct=mean_no_outlier) %>%
+            mutate_at(vars(condition_pct, control_pct),
+                      funs(./100)) %>%
+            mutate(relative_levels = control_pct*(1-condition_pct)/(condition_pct*(1-control_pct)))
+
+        pct_table = rel_levels %>%
+            select(condition, control, relative_levels) %>%
+            mutate_at("relative_levels", funs(round(., digits=3)))
+        pct_draw = tableGrob(pct_table, rows=NULL, cols=c("condition","control","relative levels"),
+                            ttheme_minimal(base_size=10))
+        th = 1+length(conditions)/2
+        page = arrangeGrob(barplot, boxplot, pct_draw, layout_matrix=rbind(c(1,2),c(3,3)),
+                           widths=unit(c(wl, wr), "cm"),
+                           heights=unit(c(9,th),"cm"))
+    } else {
+        page = arrangeGrob(barplot, boxplot,
+                           widths=unit(c(wl, wr), "cm"),
+                           heights=unit(c(9,th),"cm"))
+    }
 
     ggsave(plot_out, page, width = wl+wr, height=9+th+.5, units = "cm")
 }
