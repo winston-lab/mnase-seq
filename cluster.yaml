@@ -8,7 +8,7 @@ __default__ :
     err : "logs/cluster/{rule}.{wildcards}.err"
 
 fastqc_raw:
-    time : 45
+    time : 60
     n : 2
     mem : 200
 
@@ -47,7 +47,7 @@ get_fragments:
     mem : 4000
 
 midpoint_coverage:
-    time : 20
+    time : 30
     mem : 100
 
 whole_fragment_coverage:
