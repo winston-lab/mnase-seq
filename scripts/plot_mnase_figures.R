@@ -654,8 +654,8 @@ main = function(in_paths, samplelist, anno_paths, ptype, readtype, upstream, dns
         ggsave(meta_group_out, plot = meta_group, width=16, height=9, units="cm", limitsize=FALSE)
         ggsave(meta_sampleclust_out, plot = meta_sampleclust, width=6+7*n_groups, height=10, units="cm", limitsize=FALSE)
         ggsave(meta_groupclust_out, plot = meta_groupclust, width=6+7*n_groups, height=10, units="cm", limitsize=FALSE)
-        ggsave(metahmap_sample_out, plot = metahmap_sample, width=10+10*max_reps, height=4+4*n_anno, units="cm", limitsize=FALSE)
-        ggsave(metahmap_group_out, plot = metahmap_group, width=20, height=4+4*n_anno, units="cm", limitsize=FALSE)
+        ggsave(metahmap_sample_out, plot = metahmap_sample, width=20+10*max_reps, height=4+4*n_anno, units="cm", limitsize=FALSE)
+        ggsave(metahmap_group_out, plot = metahmap_group, width=30, height=4+4*n_anno, units="cm", limitsize=FALSE)
     } else if (n_anno>1 && max(k)==1){
         meta_sample = meta_sample + facet_grid(replicate ~ annotation)
 

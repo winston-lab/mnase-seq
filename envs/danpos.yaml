@@ -8,3 +8,4 @@ dependencies:
     - numpy=1.5.1
     - rpy2=2.8.5
     - r=3.3.2
+    - icu=58.2=hfc679d8_0
