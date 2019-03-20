@@ -18,7 +18,7 @@ fastqc_processed:
     mem : 200
 
 plot_fastqc_summary:
-    time: 4
+    time: 8
     n: 1
     mem: 400
 
