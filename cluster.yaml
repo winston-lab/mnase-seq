@@ -8,7 +8,7 @@ __default__ :
     err : "logs/cluster/{rule}.{wildcards}.err"
 
 fastqc_raw:
-    time : 15
+    time : 45
     n : 2
     mem : 200
 
