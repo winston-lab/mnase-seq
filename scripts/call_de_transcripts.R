@@ -37,7 +37,7 @@ reverselog_trans <- function(base = exp(1)) {
 separate_name = function(df){
     df %>% separate(name, into=c('transcript_id','chrstrand','start','end'), sep="~", convert=TRUE) %>%
         separate(chrstrand, into=c('chrom', 'strand'), sep="-") %>%
-        mutate_at(vars(strand), funs(if_else(.=="minus", "-", "+"))) %>%
+        mutate_at(vars(strand), ~(if_else(.=="minus", "-", "+"))) %>%
         return()
 }
 
@@ -87,7 +87,7 @@ call_de_bases = function(intable, norm, sitable, samples, groups, condition, con
         rownames_to_column(var="name") %>% as_tibble() %>%
         gather(sample, signal, -name) %>% group_by(name) %>%
         summarise(mean=mean(signal), sd=sd(signal)) %>%
-        mutate(rank = min_rank(desc(mean)))
+        mutate(rank = min_rank(dplyr::desc(mean)))
     maxsd = max(ntd$sd)*1.01
     ntdplot = mean_sd_plot(ntd, maxsd) +
         ggtitle(expression(paste("raw ", log[2]("counts"))))
@@ -105,7 +105,7 @@ call_de_bases = function(intable, norm, sitable, samples, groups, condition, con
         group_by(transcript_id, chrom, strand, start, end) %>%
         summarise(mean=mean(signal), sd=sd(signal)) %>%
         ungroup() %>%
-        mutate(rank = min_rank(desc(mean)))
+        mutate(rank = min_rank(dplyr::desc(mean)))
     rldplot = mean_sd_plot(rld, maxsd) +
                 ggtitle(expression(paste("regularized ", log[2]("counts"))))
 
@@ -116,9 +116,9 @@ call_de_bases = function(intable, norm, sitable, samples, groups, condition, con
         separate_name() %>%
         arrange(padj) %>%
         inner_join(ncountsavg, by=c('transcript_id', 'chrom', 'strand', 'start', 'end')) %>%
-        mutate_at(c('pvalue','padj'), funs(-log10(.))) %>%
+        mutate_at(c('pvalue','padj'), ~(-log10(.))) %>%
         mutate_if(is.numeric, round, 3) %>% dplyr::rename(logpval=pvalue, logpadj=padj, meanExpr=baseMean) %>%
-        mutate_at(vars(start, end), funs(as.integer(.))) %>%
+        mutate_at(vars(start, end), ~(as.integer(.))) %>%
         write_tsv(path=results_all, col_names=TRUE)
 
     #plot library size vs sizefactor

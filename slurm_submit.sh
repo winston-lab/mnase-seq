@@ -7,7 +7,8 @@
 #SBATCH -e snakemake.err
 #SBATCH -o snakemake.log
 #SBATCH -J MNase-seq-snakemake
-
+#SBATCH --mail-type=ALL                    # ALL email notification type
+#SBATCH --mail-user=cweiner@g.harvard.edu  # Email to which notifications will be sent
 snakemake -p \
     -R `cat <(snakemake --lc --rerun-incomplete) \
             <(snakemake --li --rerun-incomplete) \
