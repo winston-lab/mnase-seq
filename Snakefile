@@ -69,7 +69,7 @@ include: "rules/mnase-seq_genome_coverage.smk"
 include: "rules/mnase-seq_sample_similarity.smk"
 include: "rules/mnase-seq_datavis.smk"
 include: "rules/mnase-seq_quantification.smk"
-include: "rules/mnase-seq_differential_occupancy.smk"
+# include: "rules/mnase-seq_differential_occupancy.smk"
 
 onsuccess:
     shell("(./mogrify.sh) > mogrify.log")
@@ -113,6 +113,6 @@ rule all:
         expand(expand("nucleosome_quantification/regions/{{figure}}/spikenorm/{condition}-v-{control}/{{figure}}_{condition}-v-{control}_spikenorm-individual-occupancy-heatmaps.svg", zip, condition=conditiongroups_si, control=controlgroups_si), figure=QUANT) if SIPASSING and comparisons_si else [],
         expand(expand("nucleosome_quantification/regions/{{figure}}/libsizenorm/{condition}-v-{control}/{{figure}}_{condition}-v-{control}_libsizenorm-individual-occupancy-heatmaps.svg", zip, condition=conditiongroups, control=controlgroups), figure=QUANT),
         #differential nucleosome levels over transcripts
-        expand("diff_levels/{condition}-v-{control}/spikenorm/{condition}-v-{control}-mnase-seq-results-spikenorm-all.tsv", zip, condition=conditiongroups_si, control=controlgroups_si) if SIPASSING and comparisons_si else [],
-        expand("diff_levels/{condition}-v-{control}/libsizenorm/{condition}-v-{control}-mnase-seq-results-libsizenorm-all.tsv", zip, condition=conditiongroups, control=controlgroups),
+        # expand("diff_levels/{condition}-v-{control}/spikenorm/{condition}-v-{control}-mnase-seq-results-spikenorm-all.tsv", zip, condition=conditiongroups_si, control=controlgroups_si) if SIPASSING and comparisons_si else [],
+        # expand("diff_levels/{condition}-v-{control}/libsizenorm/{condition}-v-{control}-mnase-seq-results-libsizenorm-all.tsv", zip, condition=conditiongroups, control=controlgroups),
 
