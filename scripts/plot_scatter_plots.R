@@ -6,7 +6,7 @@ main = function(intable, binsize, pcount, samplelist, outpath){
     df = intable %>% read_tsv() %>%
         gather(key=sample, value=signal, -name) %>%
         filter(sample %in% samplelist) %>%
-        mutate_at(vars(sample), funs(fct_inorder(., ordered=TRUE))) %>%
+        mutate_at(vars(sample), ~(fct_inorder(., ordered=TRUE))) %>%
         spread(sample, signal) %>%
         select(-name)
 

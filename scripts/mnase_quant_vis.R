@@ -49,12 +49,12 @@ main = function(individual_path, integrated_path, anno_paths, anno_labels, sortm
     }
     individual = individual %>%
         mutate_at(vars(nuc_start, nuc_end, nuc_summit),
-                  funs(if_else(feat_strand=="+", .-feat_start, feat_end-.))) %>%
+                  ~(if_else(feat_strand=="+", .-feat_start, feat_end-.))) %>%
         group_by(annotation) %>%
         mutate(anno_labeled = paste(n_distinct(feat_name), annotation)) %>%
         ungroup() %>% mutate(annotation=anno_labeled) %>% select(-anno_labeled) %>%
         mutate_at(vars(group, annotation),
-                  funs(fct_inorder(., ordered=TRUE)))
+                  ~(fct_inorder(., ordered=TRUE)))
     if (sortmethod=="length"){
         individual = individual %>%
             group_by(annotation, feat_name) %>%
@@ -86,7 +86,7 @@ main = function(individual_path, integrated_path, anno_paths, anno_labels, sortm
         mutate(feat_start=start, feat_end=end) %>%
         select(-c(start, end, nuc_chrom, overlap)) %>%
         mutate_at(vars(nuc_start, nuc_end, nuc_center, ctrl_summit_loc, cond_summit_loc, diff_summit_loc),
-                  funs(if_else(feat_strand=="+", .-feat_start, feat_end-.))) %>%
+                  ~(if_else(feat_strand=="+", .-feat_start, feat_end-.))) %>%
         group_by(annotation) %>%
         mutate(anno_labeled = paste(n_distinct(feat_name), annotation)) %>%
         ungroup() %>% mutate(annotation=anno_labeled) %>% select(-anno_labeled) %>%

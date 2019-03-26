@@ -6,7 +6,7 @@ library(ggrepel)
 
 import = function(path){
     read_tsv(path) %>%
-        mutate_at(vars(sample, status), funs(fct_inorder(., ordered=TRUE))) %>%
+        mutate_at(vars(sample, status), ~(fct_inorder(., ordered=TRUE))) %>%
         return()
 }
 
@@ -19,7 +19,7 @@ main = function(seq_len_dist_in, per_tile_in, per_base_qual_in,
     #damnit fastqc...why bin some of the data and then output in this shite format...
     length_distribution = import(seq_len_dist_in) %>%
         separate(length, into=c('a','b'), sep="-", fill="right", convert=TRUE) %>%
-        mutate_at(vars(count), funs(if_else(is.na(b), ., ./2))) %>%
+        mutate_at(vars(count), ~(if_else(is.na(b), ., ./2))) %>%
         gather(key, length, c(a,b)) %>%
         filter(!is.na(length)) %>%
         select(-key)
@@ -27,14 +27,14 @@ main = function(seq_len_dist_in, per_tile_in, per_base_qual_in,
     nsamples = n_distinct(length_distribution$sample)
 
     per_tile_quality = import(per_tile_in) %>%
-        mutate_at(vars(tile), funs(fct_inorder(as.character(.), ordered=TRUE)))
+        mutate_at(vars(tile), ~(fct_inorder(as.character(.), ordered=TRUE)))
 
     per_base_qual = import(per_base_qual_in) %>%
         left_join(length_distribution, by=c("base"="length", "sample", "status")) %>%
         group_by(sample, status) %>%
-        mutate_at(vars(count), funs(if_else(is.na(.), 0, .))) %>%
+        mutate_at(vars(count), ~(if_else(is.na(.), 0, .))) %>%
         mutate(n = lag(sum(count)-cumsum(count), default=sum(count))) %>%
-        mutate_at(vars(n), funs(./max(n)))
+        mutate_at(vars(n), ~(./max(n)))
 
     adapter_content = import(adapter_content_in)
 
@@ -42,8 +42,8 @@ main = function(seq_len_dist_in, per_tile_in, per_base_qual_in,
         left_join(import(per_base_n_in), by=c("base", "sample","status")) %>%
         rename(position=base, n=n_count) %>%
         gather(base, pct, -c(position, sample, status)) %>%
-        mutate_at(vars(base), funs(toupper(.))) %>%
-        mutate_at(vars(base), funs(fct_inorder(., ordered=TRUE)))
+        mutate_at(vars(base), ~(toupper(.))) %>%
+        mutate_at(vars(base), ~(fct_inorder(., ordered=TRUE)))
 
     per_seq_gc = import(per_seq_gc_in) %>%
         filter(count > 0) %>%
@@ -56,7 +56,7 @@ main = function(seq_len_dist_in, per_tile_in, per_base_qual_in,
         mutate(norm_count = count/sum(count))
 
     duplication_levels = import(seq_dup_in) %>%
-        mutate_at(vars(duplication_level), funs(fct_inorder(., ordered=TRUE)))
+        mutate_at(vars(duplication_level), ~(fct_inorder(., ordered=TRUE)))
 
     #kmer_content = import(kmer_in)
 

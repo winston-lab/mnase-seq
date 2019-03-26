@@ -11,7 +11,7 @@ main = function(in_path, sample_list, controls, conditions, plot_out, stats_out)
                                    si_pct< -2.5*quantile(si_pct,.25) - 1.5*quantile(si_pct,.75),
                                TRUE, FALSE)) %>%
         ungroup() %>%
-        mutate_at(vars(sample, group), funs(fct_inorder(., ordered=TRUE)))
+        mutate_at(vars(sample, group), ~(fct_inorder(., ordered=TRUE)))
 
     n_samples = nrow(df)
     n_groups = df %>% pull(group) %>% n_distinct()
@@ -41,14 +41,15 @@ main = function(in_path, sample_list, controls, conditions, plot_out, stats_out)
               axis.title.y = element_text(size=12, color="black", face="bold"))
 
     si_stats = df %>%
-        add_count(group) %>%
+        add_count(group, name="n") %>%
         group_by(group) %>%
         mutate(median = median(si_pct)) %>%
         ungroup() %>%
         filter(!outlier) %>%
-        add_count(group) %>%
+        add_count(group, name="nn") %>%
         group_by(group) %>%
-        summarise(n = median(n), median = median(median),
+        summarise(n = median(n),
+                  median = median(median),
                   n_no_outlier = median(nn),
                   mean_no_outlier = mean(si_pct),
                   sd_no_outlier = sd(si_pct)) %>%
@@ -67,12 +68,12 @@ main = function(in_path, sample_list, controls, conditions, plot_out, stats_out)
                       by=c("control"="group")) %>%
             rename(control_pct=mean_no_outlier) %>%
             mutate_at(vars(condition_pct, control_pct),
-                      funs(./100)) %>%
+                      ~(./100)) %>%
             mutate(relative_levels = control_pct*(1-condition_pct)/(condition_pct*(1-control_pct)))
 
         pct_table = rel_levels %>%
             select(condition, control, relative_levels) %>%
-            mutate_at("relative_levels", funs(round(., digits=3)))
+            mutate_at("relative_levels", ~(round(., digits=3)))
         pct_draw = tableGrob(pct_table, rows=NULL, cols=c("condition","control","relative levels"),
                             ttheme_minimal(base_size=10))
         th = 1+length(conditions)/2

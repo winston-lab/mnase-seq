@@ -347,7 +347,7 @@ main = function(in_paths, samplelist, anno_paths, ptype, readtype, upstream, dns
         ungroup() %>%
         mutate(annotation = annotation_labeled) %>%
         select(-annotation_labeled)%>%
-        mutate_at(vars(group, sample, annotation), funs(fct_inorder(., ordered=TRUE)))
+        mutate_at(vars(group, sample, annotation), ~(fct_inorder(., ordered=TRUE)))
 
     #get replicate info for sample facetting
     repl_df = df %>%
