@@ -31,8 +31,8 @@ QUANT = config["quantification"]
 wildcard_constraints:
     sample = "|".join(re.escape(x) for x in list(SAMPLES.keys()) + ["unmatched"]),
     group = "|".join(set(re.escape(v["group"]) for k,v in SAMPLES.items())),
-    control = "|".join(set(re.escape(x) for x in controlgroups + (conditiongroups_si if comparisons_si else []) + ["all"])),
-    condition = "|".join(set(re.escape(x) for x in conditiongroups + (controlgroups_si if comparisons_si else []) + ["all"])),
+    control = "|".join(set(re.escape(x) for x in controlgroups + (controlgroups_si if comparisons_si else []) + ["all"])),
+    condition = "|".join(set(re.escape(x) for x in conditiongroups + (conditiongroups_si if comparisons_si else []) + ["all"])),
     species = "experimental|spikein",
     read_status = "raw|cleaned|aligned|unaligned",
     figure = "|".join(re.escape(x) for x in list(FIGURES.keys()) + list(QUANT.keys())),
