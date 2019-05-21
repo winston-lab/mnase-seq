@@ -1,5 +1,4 @@
 library(tidyverse)
-library(forcats)
 library(viridis)
 
 survival_plot = function(df, scalefactor, ylabel){
@@ -54,8 +53,8 @@ main = function(in_table, surv_abs_out, surv_rel_out, loss_out){
                              scalefactor = .01, ylabel = "% of raw reads") +
         ggtitle("read processing summary", subtitle = "relative to library size")
 
-    ggsave(surv_abs_out, plot=surv_abs, width=16, height=2+2.5*nsamples, units="cm")
-    ggsave(surv_rel_out, plot=surv_rel, width=16, height=2+2.5*nsamples, units="cm")
+    ggsave(surv_abs_out, plot=surv_abs, width=16, height=2+2.5*nsamples, units="cm", limitsize=FALSE)
+    ggsave(surv_rel_out, plot=surv_rel, width=16, height=2+2.5*nsamples, units="cm", limitsize=FALSE)
 
     loss_plot = ggplot(data = loss, aes(x=step, y=0, fill=loss)) +
         geom_raster() +
@@ -79,7 +78,7 @@ main = function(in_table, surv_abs_out, surv_rel_out, loss_out){
               plot.subtitle = element_text(size=12, face="plain"),
               panel.border = element_blank())
 
-    ggsave(loss_out, plot=loss_plot, width=16, height=2+1.5*nsamples, units="cm")
+    ggsave(loss_out, plot=loss_plot, width=16, height=2+1.5*nsamples, units="cm", limitsize=FALSE)
 }
 
 main(in_table = snakemake@input[[1]],

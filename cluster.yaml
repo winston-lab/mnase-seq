@@ -37,7 +37,7 @@ bam_separate_species:
     mem: 75
 
 get_fragment_lengths:
-    time: 60
+    time: 120
     n: 4
     mem: 4000
 
