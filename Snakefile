@@ -80,7 +80,7 @@ def statuscheck(dict1, dict2):
     return(["passing"] if dict1 == dict2 else ["all", "passing"])
 
 def conditioncheck(conditionlist):
-    return(conditionlist if len(conditionlist)==1 else conditionlist + ["all"])
+    return(conditionlist if len(conditionlist)==1 or len(conditionlist) > 8 else conditionlist + ["all"])
 
 rule all:
     input:

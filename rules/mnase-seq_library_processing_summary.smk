@@ -62,7 +62,8 @@ rule build_spikein_counts_table:
         groups = [v["group"] for k,v in SISAMPLES.items()]
     output:
         "qual_ctrl/spikein/mnase-seq_spikein-counts.tsv"
-    log: "logs/build_spikein_counts_table.log"
+    log:
+        "logs/build_spikein_counts_table.log"
     run:
         shell("""(echo -e "sample\tgroup\ttotal_fragments\texperimental_fragments\tspikein_fragments" > {output}) &> {log} """)
         for sample, group, total_bam, exp_bam, si_bam in zip(SISAMPLES.keys(), params.groups, input.total_bam, input.exp_bam, input.si_bam):

@@ -20,7 +20,7 @@ fastqc_processed:
 plot_fastqc_summary:
     time: 8
     n: 1
-    mem: 400
+    mem: 2000
 
 clean_reads:
     time : 15
@@ -59,8 +59,8 @@ whole_fragment_coverage:
     mem : 100
 
 smoothed_midpoint_coverage:
-    time : 3
-    mem : 75
+    time : 6
+    mem : 150
 
 normalize_genome_coverage:
     time: 4
@@ -75,12 +75,12 @@ map_to_windows:
     mem: 100
 
 join_window_counts:
-    time: 5
+    time: 10
     mem: 100
 
 plot_scatter_plots:
-    time : 20
-    mem : 10000
+    time : 40
+    mem : 20000
 
 # plot_fragsizes:
 #     time : 60
@@ -91,8 +91,8 @@ compute_matrix:
     mem : 400
 
 plot_figures:
-    time : 40
-    mem : 10000
+    time : 60
+    mem : 20000
 
 danpos_quantification:
     time: 60
@@ -109,4 +109,9 @@ danpos_vis_over_annotations:
 call_nuclevel_changes:
     time: 10
     mem: 10000
+
+build_spikein_counts_table:
+    time: 60
+    mem: 2000
+
 

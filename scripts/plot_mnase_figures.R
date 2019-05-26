@@ -96,7 +96,10 @@ main = function(in_paths, samplelist, anno_paths, ptype, readtype, upstream, dns
         return(heatmap_base)
     }
 
-    meta = function(df, groupvar="sample"){
+    meta = function(df, groupvar="sample", n){
+
+        palette = if(n > 12){rep(ptol_pal()(12), ceiling(n/12))} else {ptol_pal()(n)}
+
         if (groupvar=="sample"){
             metagene = ggplot(data = df, aes(x=position, group=sample,
                                              color=group, fill=group))
@@ -126,8 +129,9 @@ main = function(in_paths, samplelist, anno_paths, ptype, readtype, upstream, dns
                         alpha=0.4, size=0) +
             geom_line(aes(y=mid)) +
             scale_y_continuous(limits = c(NA, NA), name="normalized counts") +
-            scale_color_ptol(guide=guide_legend(label.position="top", label.hjust=0.5)) +
-            scale_fill_ptol() +
+            scale_color_manual(values=palette,
+                               guide=guide_legend(label.position="top", label.hjust=0.5)) +
+            scale_fill_manual(values=palette) +
             ggtitle(if(readtype=="midpoint"){"MNase-seq dyad signal"} else {"MNase-seq protection"}) +
             theme_light() +
             theme(text = element_text(size=12, color="black", face="bold"),
@@ -599,10 +603,10 @@ main = function(in_paths, samplelist, anno_paths, ptype, readtype, upstream, dns
                   fitted=loess(mid~position, data=., span=100/(upstream+dnstream))[["fitted"]])) %>%
         slice(find_peaks(fitted, m=10) %>% as.integer())
 
-    meta_sample = meta(metadf_sample)
-    meta_group = meta(metadf_group, groupvar="group")
-    meta_sampleclust = meta(metadf_sample, groupvar="sampleclust")
-    meta_groupclust = meta(metadf_group, groupvar="groupclust")
+    meta_sample = meta(metadf_sample, n=n_groups)
+    meta_group = meta(metadf_group, groupvar="group", n=n_groups)
+    meta_sampleclust = meta(metadf_sample, groupvar="sampleclust", n=max(k))
+    meta_groupclust = meta(metadf_group, groupvar="groupclust", n=max(k))
     metahmap_sample = metahmap(metadf_sample, peakdf_sample)
     metahmap_group = metahmap(metadf_group, peakdf_group)
 
@@ -615,15 +619,17 @@ main = function(in_paths, samplelist, anno_paths, ptype, readtype, upstream, dns
                     subtitle = annotations[1]) +
             theme(legend.position="none")
 
-        meta_sample_overlay = meta(metadf_sample) +
-            scale_color_ptol() +
+        palette = if(n_groups > 12){rep(ptol_pal()(12), ceiling(n_groups/12))} else {ptol_pal()(n_groups)}
+
+        meta_sample_overlay = meta(metadf_sample, n=n_groups) +
+            scale_color_manual(values=palette) +
             ggtitle(if(readtype=="midpoint"){"MNase-seq dyad signal"} else {"MNase-seq protection"},
                     subtitle = annotations[1]) +
             theme(legend.position="right",
                   legend.key.width=unit(0.8, "cm"))
 
         meta_group = meta_group +
-            scale_color_ptol() +
+            scale_color_manual(values=palette) +
             ggtitle(if(readtype=="midpoint"){"MNase-seq dyad signal"} else {"MNase-seq protection"},
                     subtitle = annotations[1]) +
             theme(legend.position="right",
@@ -676,7 +682,8 @@ main = function(in_paths, samplelist, anno_paths, ptype, readtype, upstream, dns
             theme(strip.background = element_rect(fill="white", size=0))
         meta_sample %<>% nest_top_facets(level=2)
 
-        meta_sample_overlay = meta(metadf_sample) + facet_grid(cluster ~ annotation)
+        meta_sample_overlay = meta(metadf_sample, n=n_groups) +
+            facet_grid(cluster ~ annotation)
 
         meta_group = meta_group + facet_grid(cluster ~ annotation)
 

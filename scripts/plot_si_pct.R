@@ -15,12 +15,14 @@ main = function(in_path, sample_list, controls, conditions, plot_out, stats_out)
 
     n_samples = nrow(df)
     n_groups = df %>% pull(group) %>% n_distinct()
+    palette = if(n_groups > 12){rep(ptol_pal()(12), ceiling(n_groups/12))} else {ptol_pal()(n_groups)}
 
     barplot = ggplot(data=df, aes(x=sample, fill=group, y=si_pct)) +
         geom_col() +
         geom_text(aes(label=round(si_pct, 1)), size=12/75*25.4,
                   position=position_stack(vjust=0.9)) +
-        scale_fill_ptol(guide=FALSE) +
+        scale_fill_manual(values=palette,
+                          guide=FALSE) +
         ylab("% spike-in") +
         theme_light() +
         theme(axis.text = element_text(size=12, color="black", face="bold"),
@@ -32,7 +34,8 @@ main = function(in_path, sample_list, controls, conditions, plot_out, stats_out)
     boxplot = ggplot(data = df, aes(x=group, y=si_pct, fill=group)) +
         geom_boxplot(outlier.shape=16, outlier.size=1.5, outlier.color="red", outlier.stroke=0) +
         geom_point(shape=16, size=1, stroke=0) +
-        scale_fill_ptol(guide=FALSE) +
+        scale_fill_manual(values=palette,
+                          guide=FALSE) +
         ylab("% spike-in") +
         theme_light() +
         theme(axis.text = element_text(size=12, color="black", face="bold"),

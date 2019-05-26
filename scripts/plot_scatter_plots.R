@@ -77,7 +77,7 @@ main = function(intable, binsize, pcount, samplelist, outpath){
                           strip.switch.pad.wrap = unit(0, "points"))
     w = 3+ncol(df)*4
     h = 9/16*w+0.5
-    ggsave(outpath, mat, width=w, height=h, units="cm")
+    ggsave(outpath, mat, width=w, height=h, units="cm", limitsize=FALSE)
     print(warnings())
 }
 
