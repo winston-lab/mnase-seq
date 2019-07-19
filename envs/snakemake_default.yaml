@@ -4,7 +4,7 @@ channels:
     - conda-forge
 
 dependencies:
-    - snakemake=5.3.1=0
+    - snakemake=5.5.3=0
     - gawk=4.2.1=h470a237_0
     - sed=4.4=h6e7b4c1_1001
     - pigz=2.4=h84994c4_0

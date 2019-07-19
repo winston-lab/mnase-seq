@@ -15,6 +15,7 @@ snakemake.err
 snakemake.log
 *.svg
 mogrify.log
+mogrify.err
 README.html
 config.yaml
 *.*.swp
