@@ -2,8 +2,8 @@
 
 #SBATCH -p short
 #SBATCH -t 12:00:00
-#SBATCH --mem-per-cpu=1400M
-#SBATCH -c 1
+#SBATCH --mem-per-cpu=400M
+#SBATCH -c 8
 #SBATCH -e snakemake.err
 #SBATCH -o snakemake.log
 #SBATCH -J MNase-seq-snakemake
