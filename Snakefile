@@ -17,8 +17,10 @@ SISAMPLES = {k:v for k,v in SAMPLES.items() if v["spikein"]}
 PASSING = {k:v for k,v in SAMPLES.items() if v["pass-qc"]}
 SIPASSING = {k:v for k,v in PASSING.items() if v["spikein"]}
 
-controlgroups = list(itertools.chain(*[d.values() for d in config["comparisons"]["libsizenorm"]]))
-conditiongroups = list(itertools.chain(*[d.keys() for d in config["comparisons"]["libsizenorm"]]))
+comparisons = config["comparisons"]["libsizenorm"]
+if comparisons:
+    controlgroups = list(itertools.chain(*[d.values() for d in config["comparisons"]["libsizenorm"]]))
+    conditiongroups = list(itertools.chain(*[d.keys() for d in config["comparisons"]["libsizenorm"]]))
 
 comparisons_si = config["comparisons"]["spikenorm"]
 if comparisons_si:
@@ -31,8 +33,8 @@ QUANT = config["quantification"]
 wildcard_constraints:
     sample = "|".join(re.escape(x) for x in list(SAMPLES.keys()) + ["unmatched"]),
     group = "|".join(set(re.escape(v["group"]) for k,v in SAMPLES.items())),
-    control = "|".join(set(re.escape(x) for x in controlgroups + (controlgroups_si if comparisons_si else []) + ["all"])),
-    condition = "|".join(set(re.escape(x) for x in conditiongroups + (conditiongroups_si if comparisons_si else []) + ["all"])),
+    control = "|".join(set(re.escape(x) for x in (controlgroups if comparisons else []) + (controlgroups_si if comparisons_si else []) + ["all"])),
+    condition = "|".join(set(re.escape(x) for x in (conditiongroups if comparisons else []) + (conditiongroups_si if comparisons_si else []) + ["all"])),
     species = "experimental|spikein",
     read_status = "raw|cleaned|aligned|unaligned",
     figure = "|".join(re.escape(x) for x in list(FIGURES.keys()) + list(QUANT.keys())),
@@ -100,18 +102,18 @@ rule all:
         "qual_ctrl/fragment_length_distributions/mnase-seq_fragment_length_distributions.svg",
         expand("qual_ctrl/spikein/mnase-seq_spikein-plots-{status}.svg", status=statuscheck(SISAMPLES, SIPASSING)) if SISAMPLES else [],
         expand(expand("qual_ctrl/scatter_plots/{condition}-v-{control}/{{status}}/{condition}-v-{control}_mnase-seq-spikenorm-scatterplots-{{status}}-window-{{windowsize}}.svg", zip, condition=conditioncheck(conditiongroups_si), control=conditioncheck(controlgroups_si)), status=statuscheck(SISAMPLES, SIPASSING), windowsize=config["scatterplot_binsizes"]) if SISAMPLES and comparisons_si else [],
-        expand(expand("qual_ctrl/scatter_plots/{condition}-v-{control}/{{status}}/{condition}-v-{control}_mnase-seq-libsizenorm-scatterplots-{{status}}-window-{{windowsize}}.svg", zip, condition=conditioncheck(conditiongroups), control=conditioncheck(controlgroups)), status=statuscheck(SAMPLES, SISAMPLES), windowsize=config["scatterplot_binsizes"]),
+        expand(expand("qual_ctrl/scatter_plots/{condition}-v-{control}/{{status}}/{condition}-v-{control}_mnase-seq-libsizenorm-scatterplots-{{status}}-window-{{windowsize}}.svg", zip, condition=conditioncheck(conditiongroups), control=conditioncheck(controlgroups)), status=statuscheck(SAMPLES, SISAMPLES), windowsize=config["scatterplot_binsizes"]) if comparisons else [],
         #datavis
         expand(expand("datavis/{{figure}}/spikenorm/{condition}-v-{control}/{{status}}/{{readtype}}/mnase-seq_{{figure}}-spikenorm-{{status}}_{condition}-v-{control}_{{readtype}}-heatmap-bysample.svg", zip, condition=conditioncheck(conditiongroups_si), control=conditioncheck(controlgroups_si)), figure=FIGURES, readtype=["midpoint","wholefrag"], status=statuscheck(SISAMPLES, SIPASSING)) if config["plot_figures"] and SISAMPLES and comparisons_si else [],
-        expand(expand("datavis/{{figure}}/libsizenorm/{condition}-v-{control}/{{status}}/{{readtype}}/mnase-seq_{{figure}}-libsizenorm-{{status}}_{condition}-v-{control}_{{readtype}}-heatmap-bysample.svg", zip, condition=conditioncheck(conditiongroups), control=conditioncheck(controlgroups)), figure=FIGURES, readtype=["midpoint","wholefrag"], status=statuscheck(SAMPLES, PASSING)) if config["plot_figures"] else [],
+        expand(expand("datavis/{{figure}}/libsizenorm/{condition}-v-{control}/{{status}}/{{readtype}}/mnase-seq_{{figure}}-libsizenorm-{{status}}_{condition}-v-{control}_{{readtype}}-heatmap-bysample.svg", zip, condition=conditioncheck(conditiongroups), control=conditioncheck(controlgroups)), figure=FIGURES, readtype=["midpoint","wholefrag"], status=statuscheck(SAMPLES, PASSING)) if config["plot_figures"] and comparisons else [],
         #call nucleosomes
         expand("nucleosome_quantification/{condition}-v-{control}/spikenorm/reference_positions.xls", zip, condition=conditiongroups_si, control=controlgroups_si) if SIPASSING and comparisons_si else [],
-        expand("nucleosome_quantification/{condition}-v-{control}/libsizenorm/reference_positions.xls", zip, condition=conditiongroups, control=controlgroups),
+        expand("nucleosome_quantification/{condition}-v-{control}/libsizenorm/reference_positions.xls", zip, condition=conditiongroups, control=controlgroups) if PASSING and comparisons else [],
         expand("nucleosome_quantification/{condition}-v-{control}/spikenorm/{condition}-v-{control}_spikenorm-dyad-shift-histogram.svg", zip, condition=conditiongroups_si, control=controlgroups_si) if SIPASSING and comparisons_si else [],
-        expand("nucleosome_quantification/{condition}-v-{control}/libsizenorm/{condition}-v-{control}_libsizenorm-dyad-shift-histogram.svg", zip, condition=conditiongroups, control=controlgroups),
+        expand("nucleosome_quantification/{condition}-v-{control}/libsizenorm/{condition}-v-{control}_libsizenorm-dyad-shift-histogram.svg", zip, condition=conditiongroups, control=controlgroups) if PASSING and comparisons else [],
         #danpos over annotations
         expand(expand("nucleosome_quantification/regions/{{figure}}/spikenorm/{condition}-v-{control}/{{figure}}_{condition}-v-{control}_spikenorm-individual-occupancy-heatmaps.svg", zip, condition=conditiongroups_si, control=controlgroups_si), figure=QUANT) if SIPASSING and comparisons_si else [],
-        expand(expand("nucleosome_quantification/regions/{{figure}}/libsizenorm/{condition}-v-{control}/{{figure}}_{condition}-v-{control}_libsizenorm-individual-occupancy-heatmaps.svg", zip, condition=conditiongroups, control=controlgroups), figure=QUANT),
+        expand(expand("nucleosome_quantification/regions/{{figure}}/libsizenorm/{condition}-v-{control}/{{figure}}_{condition}-v-{control}_libsizenorm-individual-occupancy-heatmaps.svg", zip, condition=conditiongroups, control=controlgroups), figure=QUANT) if PASSING and comparisons else [],
         #differential nucleosome levels over transcripts
         # expand("diff_levels/{condition}-v-{control}/spikenorm/{condition}-v-{control}-mnase-seq-results-spikenorm-all.tsv", zip, condition=conditiongroups_si, control=controlgroups_si) if SIPASSING and comparisons_si else [],
         # expand("diff_levels/{condition}-v-{control}/libsizenorm/{condition}-v-{control}-mnase-seq-results-libsizenorm-all.tsv", zip, condition=conditiongroups, control=controlgroups),
