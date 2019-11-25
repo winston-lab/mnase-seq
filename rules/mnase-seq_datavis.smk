@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 
-localrules: cat_matrices
+localrules:
+    compute_matrix,
+    cat_matrices
 
 rule compute_matrix:
     input:
@@ -76,7 +78,8 @@ rule plot_figures:
         cluster_five = lambda wc: [] if FIGURES[wc.figure]["parameters"]["arrange"] != "cluster" else FIGURES[wc.figure]["parameters"]["cluster_five"],
         cluster_three = lambda wc: [] if FIGURES[wc.figure]["parameters"]["arrange"] != "cluster" else FIGURES[wc.figure]["parameters"]["cluster_three"],
         k = lambda wc: [v["n_clusters"] for k,v in FIGURES[wc.figure]["annotations"].items()],
-    conda: "../envs/tidyverse.yaml"
+    conda:
+        "../envs/tidyverse.yaml"
     script:
         "../scripts/plot_mnase_figures.R"
 
