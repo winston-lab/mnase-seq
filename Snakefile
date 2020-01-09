@@ -117,4 +117,6 @@ rule all:
         #differential nucleosome levels over transcripts
         # expand("diff_levels/{condition}-v-{control}/spikenorm/{condition}-v-{control}-mnase-seq-results-spikenorm-all.tsv", zip, condition=conditiongroups_si, control=controlgroups_si) if SIPASSING and comparisons_si else [],
         # expand("diff_levels/{condition}-v-{control}/libsizenorm/{condition}-v-{control}-mnase-seq-results-libsizenorm-all.tsv", zip, condition=conditiongroups, control=controlgroups),
+        expand("nucleosome_quantification/distances/{condition}-v-{control}/{condition}-v-{control}_nucleosome-distances-ridgelines.svg", zip, condition=conditiongroups, control=controlgroups) if comparisons else [],
+        expand("nucleosome_quantification/distances/{condition}-v-{control}/{condition}-v-{control}_nucleosome-distances-ridgelines.svg", zip, condition=conditiongroups_si, control=controlgroups_si) if comparisons_si else [],
 

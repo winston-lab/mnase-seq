@@ -3,7 +3,9 @@
 localrules:
     group_bam_for_danpos,
     danpos_over_annotations,
-    cat_danpos_over_annotations
+    cat_danpos_over_annotations,
+    get_nucleosome_distances,
+    nucleosome_distances_datavis
 
 #danpos has an unfriendly syntax for inputs, requires putting replicates into same directory
 rule group_bam_for_danpos:
@@ -30,8 +32,8 @@ rule danpos_quantification:
         "nucleosome_quantification/{condition}-v-{control}/{norm}/pooled/nucleosome_quantification_data_{control}.Fnor.smooth.positions.xls",
         "nucleosome_quantification/{condition}-v-{control}/{norm}/pooled/nucleosome_quantification_data_{control}.Fnor.smooth.wig"
     params:
-        condition_samples = lambda wc: ",".join(get_samples("passing", "spikenorm", wc.condition)),
-        control_samples = lambda wc: ",".join(get_samples("passing", "spikenorm", wc.control)),
+        condition_samples = lambda wc: ",".join(get_samples("passing", "spikenorm", [wc.condition])),
+        control_samples = lambda wc: ",".join(get_samples("passing", "spikenorm", [wc.control])),
     conda:
         "../envs/danpos.yaml"
     log: "logs/danpos_quantification/danpos_quantification-{condition}-v-{control}-{norm}.log"
@@ -127,4 +129,31 @@ rule danpos_vis_over_annotations:
     conda: "../envs/tidyverse.yaml"
     script:
         "../scripts/mnase_quant_vis.R"
+
+rule get_nucleosome_distances:
+    input:
+        transcript_annotation = config["genome"]["transcript_annotation"],
+        nucleosome_annotation = lambda wc: expand("nucleosome_quantification/{{condition}}-v-{{control}}/{norm}/pooled/nucleosome_quantification_data_{{group}}.Fnor.smooth.positions.xls", norm="libsizenorm" if (comparisons and wc.condition in conditiongroups and wc.control in controlgroups) else "spikenorm"),
+        coverage = lambda wc: expand("coverage/libsizenorm/{sample}_mnase-midpoint_smoothed-libsizenorm.bw", sample=get_samples(status="passing", norm="libsizenorm", groups=[wc.group]))
+    output:
+        "nucleosome_quantification/distances/{condition}-v-{control}/{group}_nucleosome-distances.tsv"
+    log:
+        "logs/get_nucleosome_distances/get_nucleosome_distances_{condition}-v-{control}_{group}.log"
+    conda:
+        "../envs/nucleosome_distances.yaml"
+    shell: """
+        (python scripts/nucleosome_distances.py -t {input.transcript_annotation} -n {input.nucleosome_annotation} -c {input.coverage} -o {output}) &> {log}
+        """
+
+rule nucleosome_distances_datavis:
+    input:
+        control = "nucleosome_quantification/distances/{condition}-v-{control}/{control}_nucleosome-distances.tsv",
+        condition = "nucleosome_quantification/distances/{condition}-v-{control}/{condition}_nucleosome-distances.tsv"
+    output:
+        ridgelines = "nucleosome_quantification/distances/{condition}-v-{control}/{condition}-v-{control}_nucleosome-distances-ridgelines.svg",
+        jitter = "nucleosome_quantification/distances/{condition}-v-{control}/{condition}-v-{control}_nucleosome-distances-jitter.svg",
+    conda:
+        "../envs/ggridges.yaml"
+    script:
+        "../scripts/nucleosome_distances_datavis.R"
 

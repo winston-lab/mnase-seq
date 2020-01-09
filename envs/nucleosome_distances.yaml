@@ -1,0 +1,8 @@
+name: nucleosome_distances
+channels:
+    - conda-forge
+    - bioconda
+
+dependencies:
+    - pybedtools==0.8.1
+    - pybigwig==0.3.17
