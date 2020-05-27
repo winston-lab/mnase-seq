@@ -8,7 +8,7 @@ import pyBigWig as pybw
 def transcript_nucleosome_intersect(transcript_annotation_path,
                                     nucleosome_annotation_path):
     return (pybt.BedTool(transcript_annotation_path)
-            .intersect(pybt.BedTool(nucleosome_annotation_path),
+            .intersect(pybt.BedTool(nucleosome_annotation_path).remove_invalid(),
                        wo=True,
                        F=0.5)
             .to_dataframe(names=["chrom",

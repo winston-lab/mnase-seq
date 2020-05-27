@@ -5,7 +5,7 @@ channels:
 dependencies:
     - python=2.7.13
     - samtools=0.1.19
-    - numpy=1.5.1
+    - numpy=1.7.2
     - rpy2=2.8.5
     - r=3.3.2
     - icu=58.2=hfc679d8_0
