@@ -1,7 +1,7 @@
 name: snakemake_default
 channels:
-    - bioconda
     - conda-forge
+    - bioconda
 
 dependencies:
     - snakemake=5.5.3=0
@@ -26,4 +26,5 @@ dependencies:
     - r-svglite=1.2.1
     - r-gdtools=0.1.7
     - svg2png=4.1.1
+    - ripgrep=12.1.1
 
